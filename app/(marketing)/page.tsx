@@ -60,7 +60,7 @@ export default async function LandingPage() {
         {/* Hero */}
         <section className="shell section-y">
           <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
-            <BrandMark className="h-20 w-20" />
+            <BrandMark className="size-[4.25rem] md:size-20" />
             <p className="eyebrow mt-7">Personal &amp; team finance</p>
             <h1 className="display-lg mt-4 text-balance">
               Every rupee accounted for, without the spreadsheet.
@@ -104,9 +104,11 @@ export default async function LandingPage() {
 
       <footer className="section-rule relative">
         <div className="shell flex flex-wrap items-center justify-between gap-4 py-7">
-          <span className="flex items-center gap-2.5">
-            <BrandMark className="h-6 w-6" />
-            <span className="meta">Noirly Ledger</span>
+          <span className="flex items-center gap-4 text-[var(--text)]">
+            <span className="inline-flex size-[4.25rem] shrink-0 md:size-20">
+              <BrandMark className="size-full" />
+            </span>
+            <span className="display-md">Noirly Ledger</span>
           </span>
           <span className="meta">Budgets · Expenses · Pools · Reports</span>
         </div>
