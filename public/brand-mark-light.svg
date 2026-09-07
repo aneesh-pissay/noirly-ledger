@@ -1,12 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
-  <g fill="none" stroke="#8a6b00" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="44" y="62" width="112" height="84" rx="12"/>
-    <line x1="44" y1="88" x2="156" y2="88"/>
-    <path
-      fill="#8a6b00"
-      stroke="none"
-      fill-rule="evenodd"
-      d="M138 108a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 6a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"
-    />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Noirly Ledger mark">
+  <title>Noirly Ledger — monochrome</title>
+  <!-- Default tint for standalone use. Delete this rule to inherit color from the parent. -->
+  <style>svg { color: #8a6b00; }</style>
+  <defs>
+    <clipPath id="nlm-inner">
+      <rect x="262" y="238" width="500" height="548" rx="76"/>
+    </clipPath>
+  </defs>
+  <!-- The budget pool -->
+  <rect x="240" y="216" width="544" height="592" rx="96"
+        fill="none" stroke="currentColor" stroke-width="16"/>
+  <!-- Allocated level, stepping up across three category bands -->
+  <g clip-path="url(#nlm-inner)">
+    <path d="M262 540 H 429 V 488 H 595 V 436 H 762 V 800 H 262 Z"
+          fill="currentColor"/>
   </g>
 </svg>
