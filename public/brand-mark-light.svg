@@ -1,18 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Noirly Ledger mark">
   <title>Noirly Ledger — monochrome</title>
-  <!-- Default tint for standalone use. Delete this rule to inherit color from the parent. -->
+  <desc>A bound ledger with entries and a bold total line.</desc>
+  <!-- Default tint for standalone use. Delete this rule to inherit color from the parent.
+       Plain currentColor shapes only (no masks/clipPaths) so theming code can recolor it safely. -->
   <style>svg { color: #8a6b00; }</style>
-  <defs>
-    <clipPath id="nlm-inner">
-      <rect x="262" y="238" width="500" height="548" rx="76"/>
-    </clipPath>
-  </defs>
-  <!-- The budget pool -->
-  <rect x="240" y="216" width="544" height="592" rx="96"
-        fill="none" stroke="currentColor" stroke-width="16"/>
-  <!-- Allocated level, stepping up across three category bands -->
-  <g clip-path="url(#nlm-inner)">
-    <path d="M262 540 H 429 V 488 H 595 V 436 H 762 V 800 H 262 Z"
-          fill="currentColor"/>
+  <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+    <!-- The book -->
+    <rect x="232" y="168" width="560" height="688" rx="80" stroke-width="52"/>
+    <!-- Spine -->
+    <path stroke-width="52" d="M352 168 V856"/>
+    <!-- Entries -->
+    <path stroke-width="40" d="M444 336 H700 M444 448 H700 M444 560 H640"/>
+    <!-- The total -->
+    <path stroke-width="64" d="M540 688 H700"/>
   </g>
 </svg>
