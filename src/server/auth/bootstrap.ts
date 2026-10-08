@@ -42,46 +42,57 @@ function slugify(input: string): string {
   return base || "workspace";
 }
 
+function isDuplicateKey(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: number }).code === 11000;
+}
+
+/** The user's personal workspace: the oldest one, so a past duplicate never wins. */
+function findPersonalWorkspace(userId: LedgerUserDocument["_id"]) {
+  return Workspace.findOne({ ownerUserId: userId, kind: "personal" }).sort({ createdAt: 1, _id: 1 });
+}
+
+/**
+ * Looked up by owner + kind rather than through "any membership where I am
+ * owner": that query could return a team workspace the user owns, miss the
+ * personal one, and create a second. Concurrent first requests (layout, page
+ * and API calls all bootstrap) are settled by the partial unique index on
+ * Workspace { ownerUserId } for kind "personal": the loser re-reads the winner.
+ */
 async function ensurePersonalWorkspace(
   user: LedgerUserDocument,
 ): Promise<WorkspaceDocument> {
-  const existingMembership = await WorkspaceMember.findOne({
-    userId: user._id,
-    role: "owner",
-  }).lean();
-
-  if (existingMembership) {
-    const workspace = await Workspace.findOne({
-      _id: existingMembership.workspaceId,
-      kind: "personal",
-    });
-    if (workspace) {
-      // Categories are seeded at create time. Do not count/seed on every nav hop.
-      return workspace;
-    }
-  }
+  const existing = await findPersonalWorkspace(user._id);
+  // Categories are seeded at create time. Do not count/seed on every nav hop.
+  if (existing) return existing;
 
   const slugBase = slugify(`${user.displayName}-personal`);
-  let slug = slugBase;
-  let n = 0;
-  while (await Workspace.exists({ slug })) {
-    n += 1;
-    slug = `${slugBase}-${n}`;
+  let workspace: WorkspaceDocument | null = null;
+  for (let n = 0; !workspace && n < 50; n += 1) {
+    const slug = n === 0 ? slugBase : `${slugBase}-${n}`;
+    if (await Workspace.exists({ slug })) continue;
+    try {
+      workspace = await Workspace.create({
+        kind: "personal",
+        name: "Personal",
+        slug,
+        ownerUserId: user._id,
+        baseCurrency: user.baseCurrency || "USD",
+      });
+    } catch (error) {
+      if (!isDuplicateKey(error)) throw error;
+      // Either another request created this user's personal workspace, or
+      // someone else took the slug between our check and insert.
+      const winner = await findPersonalWorkspace(user._id);
+      if (winner) return winner;
+    }
   }
+  if (!workspace) throw new Error("Could not allocate a personal workspace slug");
 
-  const workspace = await Workspace.create({
-    kind: "personal",
-    name: "Personal",
-    slug,
-    ownerUserId: user._id,
-    baseCurrency: user.baseCurrency || "USD",
-  });
-
-  await WorkspaceMember.create({
-    workspaceId: workspace._id,
-    userId: user._id,
-    role: "owner",
-  });
+  await WorkspaceMember.updateOne(
+    { workspaceId: workspace._id, userId: user._id },
+    { $setOnInsert: { workspaceId: workspace._id, userId: user._id, role: "owner" } },
+    { upsert: true },
+  );
 
   await seedSystemCategories(workspace._id);
   return workspace;
@@ -111,15 +122,22 @@ export async function ensureLedgerAccount(
     let user = await LedgerUser.findOne({ identitySub: sessionUser.id });
 
     if (!user) {
-      user = await LedgerUser.create({
-        identitySub: sessionUser.id,
-        email,
-        displayName,
-        avatarUrl,
-        emailVerified,
-        baseCurrency: "USD",
-        locale: "en-US",
-      });
+      try {
+        user = await LedgerUser.create({
+          identitySub: sessionUser.id,
+          email,
+          displayName,
+          avatarUrl,
+          emailVerified,
+          baseCurrency: "USD",
+          locale: "en-US",
+        });
+      } catch (error) {
+        // A concurrent first request created the user (unique identitySub).
+        if (!isDuplicateKey(error)) throw error;
+        user = await LedgerUser.findOne({ identitySub: sessionUser.id });
+        if (!user) throw error;
+      }
     } else {
       const needsUpdate =
         user.email !== email ||

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { AuthShell } from "@noirly-dev/ui";
 import { BrandMark } from "@/src/components/BrandMark";
 import { NoirlyLoginButton } from "@/src/features/auth/NoirlyLoginButton";
+import { identityUrl } from "@/src/server/auth/identity-url";
 
 export const metadata: Metadata = {
   title: "Sign in · Noirly Ledger",
@@ -34,7 +35,7 @@ export default async function LoginPage({
       }
     >
       <div className="flex flex-col gap-4">
-        <NoirlyLoginButton redirectTo={redirectTo} />
+        <NoirlyLoginButton redirectTo={redirectTo} identityUrl={identityUrl()} />
         <p className="meta text-center">Opens Identity in a secure popup</p>
       </div>
     </AuthShell>

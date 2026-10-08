@@ -3,7 +3,7 @@
 import { useForm } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { submitExpenseBodySchema } from "@/src/core/schemas/ledger";
@@ -57,6 +57,16 @@ export function ExpenseSubmitForm({
       note: "",
     },
   });
+
+  // The <select> mounts before the pool options load, so the browser drops a
+  // default it has no <option> for. Apply ?poolId= again once the pools arrive.
+  const poolList = pools.data?.pools;
+  useEffect(() => {
+    if (!defaultPoolId || !poolList?.some((pool) => pool.id === defaultPoolId)) return;
+    if (!form.getValues("budgetPoolId") || form.getValues("budgetPoolId") === defaultPoolId) {
+      form.setValue("budgetPoolId", defaultPoolId);
+    }
+  }, [defaultPoolId, poolList, form]);
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {

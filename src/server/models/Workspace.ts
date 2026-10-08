@@ -35,6 +35,13 @@ const workspaceSchema = new Schema(
   { timestamps: true },
 );
 
+// One personal workspace per user. Run scripts/merge-duplicate-personal-workspaces.mjs
+// first on a database that already has duplicates, or this index cannot build.
+workspaceSchema.index(
+  { ownerUserId: 1 },
+  { unique: true, partialFilterExpression: { kind: "personal" }, name: "one_personal_workspace_per_owner" },
+);
+
 export type WorkspaceDocument = InferSchemaType<typeof workspaceSchema> & {
   _id: Types.ObjectId;
   createdAt: Date;

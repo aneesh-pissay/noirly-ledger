@@ -23,7 +23,7 @@ export function SignOutButton() {
         ? createPortal(<LedgerBusyScreen label="Signing out" />, document.body)
         : null}
       <button
-        className="w-full cursor-pointer border border-[var(--hairline)] px-3 py-1.5 text-left text-sm text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-ink)]"
+        className="shrink-0 cursor-pointer whitespace-nowrap border border-[var(--hairline)] px-3 py-1.5 text-left text-sm text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-ink)]"
         type="button"
         onClick={() => void onSignOut()}
         disabled={busy}

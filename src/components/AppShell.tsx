@@ -136,15 +136,17 @@ export function AppShell({ user, workspaces, children }: Props) {
    * leak a mongo ObjectId into the header.
    */
   const breadcrumb: Crumb[] = useMemo(() => {
-    const workspaceName =
-      teams.find((w) => w.id === activeWorkspaceId)?.name ?? personal?.name ?? "Ledger";
+    const team = pathname.startsWith("/w/") ? teams.find((w) => w.id === activeWorkspaceId) : undefined;
+    const workspaceName = team?.name ?? personal?.name ?? "Ledger";
+    // The workspace crumb leads to that workspace's dashboard, not always Personal.
+    const workspaceHref = team ? `/w/${team.id}` : personal ? "/home" : "/";
     const flat = groups.flatMap((g) => g.items);
     const match = flat
       .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
       // Longest href wins, so /w/:id/pools beats the /w/:id dashboard entry.
       .sort((a, b) => b.href.length - a.href.length)[0];
 
-    const trail: Crumb[] = [{ label: workspaceName, href: personal ? "/home" : "/" }];
+    const trail: Crumb[] = [{ label: workspaceName, href: workspaceHref }];
     if (match) trail.push({ label: match.label, href: match.href });
     return trail;
   }, [groups, pathname, teams, personal, activeWorkspaceId]);

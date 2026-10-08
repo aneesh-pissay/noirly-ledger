@@ -42,7 +42,10 @@ export function NotificationBell() {
         ) : null}
       </button>
       {open ? (
-        <div className="absolute right-0 z-50 mt-2 w-80 overflow-hidden surface grain rounded-[var(--r-lg)] shadow-xl">
+        // Positioning lives on its own element: `.surface` sets position: relative,
+        // which overrode `absolute` and left the panel inside the 56px header.
+        <div className="absolute right-0 top-full z-50 mt-2 w-80">
+        <div className="overflow-hidden surface grain rounded-[var(--r-lg)] shadow-xl">
           <p className="border-b border-[var(--hairline)] px-3 py-2 font-mono text-[10px] uppercase tracking-wide text-[var(--muted-foreground)]">
             Notifications
           </p>
@@ -79,6 +82,7 @@ export function NotificationBell() {
           {items.length === 0 ? (
             <p className="px-3 py-6 text-sm text-[var(--muted-foreground)]">No notifications</p>
           ) : null}
+        </div>
         </div>
       ) : null}
     </div>

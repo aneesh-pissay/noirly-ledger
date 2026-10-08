@@ -8,8 +8,7 @@ import { ProductGoogleOneTap } from "@/src/features/auth/GoogleOneTap";
 
 const AUTH_MESSAGE = "noirly-auth";
 const AUTH_STORAGE_KEY = "noirly-auth";
-const IDENTITY_URL =
-  process.env.NEXT_PUBLIC_IDENTITY_URL ?? "http://localhost:3000";
+const BUILD_IDENTITY_URL = process.env.NEXT_PUBLIC_IDENTITY_URL ?? "http://localhost:3000";
 
 function safeNext(value: string): string {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/home";
@@ -33,7 +32,19 @@ function popupFeatures() {
   return `popup=yes,width=${width},height=${height},left=${left},top=${top}`;
 }
 
-export function NoirlyLoginButton({ redirectTo = "/home" }: { redirectTo?: string }) {
+/**
+ * `identityUrl` comes from the server at request time (see identityUrl() in
+ * src/server/auth/identity-url.ts). NEXT_PUBLIC_* is inlined at build time, so a
+ * build without it pointed One Tap at http://localhost:3000 in production.
+ */
+export function NoirlyLoginButton({
+  redirectTo = "/home",
+  identityUrl = BUILD_IDENTITY_URL,
+}: {
+  redirectTo?: string;
+  identityUrl?: string;
+}) {
+  const IDENTITY_URL = identityUrl;
   const target = safeNext(redirectTo);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);

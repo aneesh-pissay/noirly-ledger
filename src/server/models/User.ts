@@ -29,6 +29,8 @@ const userSchema = new Schema(
     avatarUrl: { type: String, default: null },
     baseCurrency: { type: String, required: true, default: "USD", uppercase: true },
     locale: { type: String, required: true, default: "en-US" },
+    /** Sessions signed in before this instant are refused (set on sign-out). */
+    sessionsRevokedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

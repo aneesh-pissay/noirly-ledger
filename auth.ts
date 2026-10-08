@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { isSessionRevoked, revokeSessions } from "@/src/server/auth/revocation";
 
 const issuer = process.env.AUTH_NOIRLY_ISSUER ?? "http://localhost:3000";
 const clientId = process.env.AUTH_NOIRLY_CLIENT_ID;
@@ -44,13 +45,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     },
   ],
+  events: {
+    async signOut(message) {
+      const identitySub = "token" in message ? message.token?.identitySub : undefined;
+      if (typeof identitySub === "string" && identitySub) {
+        await revokeSessions(identitySub);
+      }
+    },
+  },
   callbacks: {
-    jwt({ token, user, profile }) {
+    async jwt({ token, user, profile, trigger }) {
       if (user?.id) {
         token.identitySub = user.id;
       }
       if (profile && "sub" in profile && typeof profile.sub === "string") {
         token.identitySub = profile.sub;
+      }
+      if (trigger === "signIn" || trigger === "signUp") {
+        token.signedInAt = Date.now();
+      }
+      // Refuse sessions from before the user's last sign-out (see revocation.ts).
+      // Sessions issued before this check existed carry no signedInAt and count as 0.
+      if (typeof token.identitySub === "string" && token.identitySub) {
+        const signedInAt = typeof token.signedInAt === "number" ? token.signedInAt : 0;
+        if (await isSessionRevoked(token.identitySub, signedInAt)) return null;
       }
       return token;
     },

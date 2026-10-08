@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { BrandMark } from "@/src/components/BrandMark";
 import { MarketingHeader } from "@/src/components/MarketingHeader";
 import { NoirlyLoginButton } from "@/src/features/auth/NoirlyLoginButton";
+import { identityUrl } from "@/src/server/auth/identity-url";
 import { ensureLedgerAccount } from "@/src/server/auth/bootstrap";
 
 export const metadata: Metadata = {
@@ -71,7 +72,7 @@ export default async function LandingPage() {
             </p>
 
             <div className="mt-9 w-full max-w-xs">
-              <NoirlyLoginButton redirectTo="/home" />
+              <NoirlyLoginButton redirectTo="/home" identityUrl={identityUrl()} />
             </div>
             <p className="meta mt-4">Opens Noirly Identity in a secure popup</p>
           </div>
