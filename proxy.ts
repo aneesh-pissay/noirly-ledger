@@ -4,21 +4,17 @@ import { auth } from "@/auth";
 export const proxy = auth((request) => {
   const { pathname } = request.nextUrl;
   const isLanding = pathname === "/";
+  // Readable without an account (Google Play links to the privacy policy).
+  const isPublicPage = pathname === "/privacy";
   const isLogin = pathname === "/login";
   const isLoginPopup =
     pathname === "/login/popup" || pathname === "/login/popup-complete";
   const isAuthApi = pathname.startsWith("/api/auth");
-  const isPublicApi =
-    pathname === "/api/health" ||
-    pathname === "/api/cron/recurring" ||
-    pathname === "/api/e2e/bootstrap" ||
-    // The brand mark is fetched by the landing and login pages, which are
-    // themselves public. Behind auth it 307s to /login and every signed-out
-    // visitor falls back to the initials tile — i.e. it never renders for the
-    // only people who see those pages.
-    pathname === "/api/brand-logo";
+  // API routes authenticate themselves (cookie, or Bearer from the mobile app);
+  // redirecting them to /login would answer the app with an HTML page.
+  const isApi = pathname.startsWith("/api/");
 
-  if (!request.auth && !isLanding && !isLogin && !isLoginPopup && !isAuthApi && !isPublicApi) {
+  if (!request.auth && !isLanding && !isPublicPage && !isLogin && !isLoginPopup && !isAuthApi && !isApi) {
     const login = new URL("/login", request.nextUrl.origin);
     if (pathname.startsWith("/invite/")) {
       login.searchParams.set("next", pathname);

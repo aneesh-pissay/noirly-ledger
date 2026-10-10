@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { Card, CardContent, CardHeader, CardTitle } from "@noirly-dev/ui";
@@ -111,7 +112,12 @@ export default async function LandingPage() {
             </span>
             <span className="display-md">Noirly Ledger</span>
           </span>
-          <span className="meta">Budgets · Expenses · Pools · Reports</span>
+          <span className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <span className="meta">Budgets · Expenses · Pools · Reports</span>
+            <Link href="/privacy" className="meta underline-offset-4 hover:text-[var(--text)] hover:underline">
+              Privacy policy
+            </Link>
+          </span>
         </div>
       </footer>
     </div>

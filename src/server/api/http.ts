@@ -1,8 +1,10 @@
 import { cache } from "react";
+import { headers } from "next/headers";
 import { Types } from "mongoose";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
-import { ensureLedgerAccount } from "@/src/server/auth/bootstrap";
+import { ensureLedgerAccount, type BootstrapSessionUser } from "@/src/server/auth/bootstrap";
+import { extractBearerToken, fetchIdentityUserInfo } from "@/src/server/auth/identity-userinfo";
 import { createMongoLedgerProvider } from "@/src/server/providers/mongo-ledger-provider";
 
 export type LedgerSessionContext = {
@@ -27,17 +29,7 @@ export type PersonalWorkspaceSummary = {
  * the user twice and listed workspaces twice before painting.
  */
 export const getLedgerProvider = cache(async () => {
-  const session = await auth();
-  if (!session?.user?.id) {
-    throw new ApiError(401, "unauthorized", "Sign in required");
-  }
-
-  const account = await ensureLedgerAccount({
-    id: session.user.id,
-    email: session.user.email,
-    name: session.user.name,
-    image: session.user.image,
-  });
+  const account = await ensureLedgerAccount(await requestUser());
 
   const ctx: LedgerSessionContext = {
     identitySub: account.user.identitySub,
@@ -53,6 +45,29 @@ export const getLedgerProvider = cache(async () => {
     personal: account.personalWorkspace as PersonalWorkspaceSummary,
   };
 });
+
+/**
+ * Who is calling: the mobile app sends an Identity access token (Bearer),
+ * the web app a session cookie. Both resolve to the same Ledger account.
+ */
+async function requestUser(): Promise<BootstrapSessionUser> {
+  const bearer = extractBearerToken((await headers()).get("authorization"));
+  if (bearer) {
+    let info;
+    try {
+      info = await fetchIdentityUserInfo(bearer);
+    } catch {
+      throw new ApiError(401, "unauthorized", "Invalid or expired access token");
+    }
+    return { id: info.sub, email: info.email ?? null, name: info.name ?? null, image: info.picture ?? null };
+  }
+
+  const session = await auth();
+  if (!session?.user?.id) {
+    throw new ApiError(401, "unauthorized", "Sign in required");
+  }
+  return { id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image };
+}
 
 export const requireLedgerSession = cache(async (): Promise<LedgerSessionContext> => {
   const { ctx } = await getLedgerProvider();
