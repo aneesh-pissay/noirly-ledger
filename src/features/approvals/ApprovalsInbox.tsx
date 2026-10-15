@@ -132,7 +132,12 @@ export function ApprovalsInbox({ workspaceId }: Props) {
                 currency={item.transaction.currency}
               />
             </div>
-            {canDecide && item.status === "submitted" ? (
+            {canDecide && item.status === "submitted" && !item.canDecide ? (
+              <p className="mt-3 text-xs text-[var(--muted-foreground)]">
+                Your own expense — waiting for another approver.
+              </p>
+            ) : null}
+            {item.canDecide && item.status === "submitted" ? (
               <div className="mt-3 flex gap-2">
                 <Button
                   disabled={decide.isPending}

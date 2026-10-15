@@ -6,7 +6,7 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 import {
@@ -26,6 +26,29 @@ type ThemeContextValue = {
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+const PALETTE_CHANGED = "noirly:palette-changed";
+/** The palette picked in this tab, until another tab changes storage. */
+let sessionPalette: string | null = null;
+
+/** Palette changes from this tab, other tabs, or a back/forward restore. */
+function subscribePalette(notify: () => void) {
+  function onStorage(event: StorageEvent) {
+    if (event.key !== null && event.key !== PALETTE_STORAGE_KEY) return;
+    sessionPalette = null;
+    notify();
+  }
+  function onPageShow(event: PageTransitionEvent) {
+    if (event.persisted) notify();
+  }
+  window.addEventListener("storage", onStorage);
+  window.addEventListener("pageshow", onPageShow);
+  window.addEventListener(PALETTE_CHANGED, notify);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener("pageshow", onPageShow);
+    window.removeEventListener(PALETTE_CHANGED, notify);
+  };
+}
 
 export function ThemeProvider({
   defaultThemeId = DEFAULT_THEME_ID,
@@ -37,50 +60,31 @@ export function ThemeProvider({
   const resolvedDefault = isValidThemeId(defaultThemeId)
     ? defaultThemeId
     : DEFAULT_THEME_ID;
-  const [paletteId, setPaletteId] = useState(resolvedDefault);
-
-  const syncPalette = useCallback(
-    (id: string) => {
-      const next = isValidThemeId(id) ? id : resolvedDefault;
-      setPaletteId(next);
-      applyPalette(next, undefined, resolvedDefault);
-    },
-    [resolvedDefault],
+  const getSnapshot = useCallback(() => {
+    const stored = sessionPalette ?? readStoredPalette(resolvedDefault);
+    return isValidThemeId(stored) ? stored : resolvedDefault;
+  }, [resolvedDefault]);
+  // Read from storage during render instead of copying it into state from an effect.
+  const paletteId = useSyncExternalStore(
+    subscribePalette,
+    getSnapshot,
+    () => resolvedDefault,
   );
 
   useLayoutEffect(() => {
-    syncPalette(readStoredPalette(resolvedDefault));
+    applyPalette(paletteId, undefined, resolvedDefault);
+  }, [paletteId, resolvedDefault]);
 
-    function onStorage(event: StorageEvent) {
-      if (event.key !== PALETTE_STORAGE_KEY || !event.newValue) return;
-      syncPalette(event.newValue);
+  const setPalette = useCallback((id: string) => {
+    if (!isValidThemeId(id)) return;
+    sessionPalette = id;
+    try {
+      localStorage.setItem(PALETTE_STORAGE_KEY, id);
+    } catch {
+      /* private mode */
     }
-
-    function onPageShow(event: PageTransitionEvent) {
-      if (!event.persisted) return;
-      syncPalette(readStoredPalette(resolvedDefault));
-    }
-
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("pageshow", onPageShow);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("pageshow", onPageShow);
-    };
-  }, [resolvedDefault, syncPalette]);
-
-  const setPalette = useCallback(
-    (id: string) => {
-      if (!isValidThemeId(id)) return;
-      syncPalette(id);
-      try {
-        localStorage.setItem(PALETTE_STORAGE_KEY, id);
-      } catch {
-        /* private mode */
-      }
-    },
-    [syncPalette],
-  );
+    window.dispatchEvent(new Event(PALETTE_CHANGED));
+  }, []);
 
   const value = useMemo(
     () => ({ paletteId, setPalette, themes: NOIRLY_THEMES }),

@@ -65,7 +65,10 @@ export function ProductGoogleOneTap({
   const buttonRef = useRef<HTMLDivElement>(null);
   const [rendered, setRendered] = useState(false);
   const callbackRef = useRef(onCredential);
-  callbackRef.current = onCredential;
+  // Keep the latest callback for GSI without writing a ref during render.
+  useEffect(() => {
+    callbackRef.current = onCredential;
+  }, [onCredential]);
 
   useEffect(() => {
     let cancelled = false;

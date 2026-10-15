@@ -1,5 +1,7 @@
-import { getLedgerProvider, jsonError, jsonOk, assertObjectId } from "@/src/server/api/http";
+import { ApiError, getLedgerProvider, jsonError, jsonOk, assertObjectId } from "@/src/server/api/http";
+import { withDb } from "@/src/server/db/mongodb";
 import { saveReceipt } from "@/src/server/storage/receipts";
+import { requireAction } from "@/src/server/workspace/members";
 
 export async function POST(
   request: Request,
@@ -8,11 +10,13 @@ export async function POST(
   try {
     const { workspaceId } = await params;
     await assertObjectId(workspaceId, "workspaceId");
-    await getLedgerProvider();
+    const { ctx } = await getLedgerProvider();
+    // Only members can add receipts to a workspace.
+    await withDb(() => requireAction(ctx.userId, workspaceId, "expense.submit"));
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return jsonError(new Error("file is required"));
+      throw new ApiError(400, "invalid_request", "file is required");
     }
     const bytes = Buffer.from(await file.arrayBuffer());
     const saved = await saveReceipt({

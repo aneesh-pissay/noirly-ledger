@@ -180,6 +180,8 @@ export type MemberView = {
 export type ApprovalView = ApprovalRequest & {
   transaction: Transaction;
   submitterName: string;
+  /** Whether the viewer may approve or reject it (not their own, unless nobody else can). */
+  canDecide: boolean;
 };
 
 export type CreateBudgetPoolInput = {

@@ -21,6 +21,7 @@ import type {
   TransactionDocument,
   WorkspaceDocument,
 } from "@/src/server/models";
+import { receiptUrlFor } from "@/src/server/storage/receipt-keys";
 
 function iso(value: Date | string | null | undefined): string | null {
   if (!value) return null;
@@ -73,7 +74,8 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     budgetPoolId: doc.budgetPoolId ? doc.budgetPoolId.toString() : null,
     date: isoDay(doc.date)!,
     note: doc.note ?? null,
-    receiptUrl: doc.receiptUrl ?? null,
+    // Built from the key, not the stored URL: older rows hold public R2 links.
+    receiptUrl: doc.receiptStorageKey ? receiptUrlFor(doc.receiptStorageKey) : null,
     receiptStorageKey: doc.receiptStorageKey ?? null,
     isRecurring: Boolean(doc.isRecurring),
     recurrence: recurrence

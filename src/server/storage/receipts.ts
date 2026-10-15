@@ -2,6 +2,7 @@ import { mkdir, writeFile, readFile, unlink } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { ApiError } from "@/src/server/api/http";
+import { receiptUrlFor, receiptWorkspaceId } from "@/src/server/storage/receipt-keys";
 import {
   canWriteToR2,
   deleteObject,
@@ -28,6 +29,8 @@ function mimeFromKey(key: string): string {
   return "image/jpeg";
 }
 
+export { receiptUrlFor, receiptWorkspaceId };
+
 export async function saveReceipt(input: {
   workspaceId: string;
   bytes: Buffer;
@@ -50,19 +53,19 @@ export async function saveReceipt(input: {
       input.mime,
       `ledger/receipts/${input.workspaceId}`,
     );
-    return { key: uploaded.key, url: uploaded.publicUrl };
+    return { key: uploaded.key, url: receiptUrlFor(uploaded.key) };
   }
 
   const key = `${input.workspaceId}/${filename}`;
   const path = join(ROOT, key);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, input.bytes);
-  return { key, url: `/api/receipts/${key}` };
+  return { key, url: receiptUrlFor(key) };
 }
 
 export async function readReceipt(key: string): Promise<{ bytes: Buffer; mime: string }> {
-  if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
-    throw new ApiError(400, "invalid_request", "Invalid receipt key");
+  if (!receiptWorkspaceId(key)) {
+    throw new ApiError(404, "not_found", "Receipt not found");
   }
 
   try {

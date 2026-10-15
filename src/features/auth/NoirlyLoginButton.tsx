@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@noirly-dev/ui";
 import { LedgerBusyScreen } from "@/src/components/LedgerBusyScreen";
@@ -9,6 +9,8 @@ import { ProductGoogleOneTap } from "@/src/features/auth/GoogleOneTap";
 const AUTH_MESSAGE = "noirly-auth";
 const AUTH_STORAGE_KEY = "noirly-auth";
 const BUILD_IDENTITY_URL = process.env.NEXT_PUBLIC_IDENTITY_URL ?? "http://localhost:3000";
+
+const noSubscribe = () => () => {};
 
 function safeNext(value: string): string {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/home";
@@ -49,12 +51,9 @@ export function NoirlyLoginButton({
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  // True only in the browser: the busy overlay portals into <body>.
+  const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
   const signedInRef = useRef(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     function finish(next: string) {

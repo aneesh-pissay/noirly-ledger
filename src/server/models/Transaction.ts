@@ -75,6 +75,8 @@ const transactionSchema = new Schema(
 
 transactionSchema.index({ workspaceId: 1, date: -1 });
 transactionSchema.index({ budgetPoolId: 1, isPosted: 1 });
+// The recurring engine looks up a rule's occurrences by date.
+transactionSchema.index({ recurringParentId: 1, date: -1 });
 
 export type TransactionDocument = InferSchemaType<typeof transactionSchema> & {
   _id: Types.ObjectId;

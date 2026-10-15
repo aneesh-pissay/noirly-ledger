@@ -29,8 +29,9 @@ export const createTransactionBodySchema = z.object({
   categoryId: z.string().min(1).nullable().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().max(2000).nullable().optional(),
-  receiptUrl: z.string().url().nullable().optional(),
-  receiptStorageKey: z.string().min(1).nullable().optional(),
+  /** Accepted for older clients but ignored: the server builds it from the key. */
+  receiptUrl: z.string().max(2048).nullable().optional(),
+  receiptStorageKey: z.string().min(1).max(512).nullable().optional(),
   recurrence: recurrenceSchema.nullable().optional(),
 });
 

@@ -31,6 +31,13 @@ describe("dueOccurrences", () => {
     ]);
   });
 
+  it("keeps a month-end rule on its day after a short month", () => {
+    // What the engine passes for a rule created on the 31st.
+    const rule = { frequency: "monthly" as const, interval: 1, byMonthDay: 31 };
+    const fromFeb = dueOccurrences(new Date("2026-02-28T12:00:00.000Z"), rule, new Date("2026-05-01T12:00:00.000Z"));
+    expect(fromFeb.map((d) => d.toISOString().slice(0, 10))).toEqual(["2026-03-31", "2026-04-30"]);
+  });
+
   it("stops at until", () => {
     const last = new Date("2026-01-01T12:00:00.000Z");
     const asOf = new Date("2026-02-01T12:00:00.000Z");

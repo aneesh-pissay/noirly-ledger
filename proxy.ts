@@ -1,8 +1,61 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
+import { consumeRateLimit } from "@/src/server/security/rate-limit";
 
-export const proxy = auth((request) => {
+/** Requests that prove themselves another way: a Bearer token, or a signed webhook. */
+function selfAuthenticated(request: NextRequest) {
+  return (
+    /^Bearer\s+\S+$/i.test(request.headers.get("authorization") ?? "") ||
+    request.nextUrl.pathname === "/api/identity/account-deleted"
+  );
+}
+
+function configuredOrigin(value: string | undefined) {
+  try {
+    return value ? new URL(value).origin : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Cookie-authenticated changes must come from this app's own pages: same
+ * origin, and the header only our scripts send (a cross-site form can't).
+ */
+function csrfRejection(request: NextRequest) {
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method)) return null;
+  const fail = () => NextResponse.json({ error: "csrf_failed" }, { status: 403 });
+  const origin = request.headers.get("origin");
+  const expected = configuredOrigin(process.env.AUTH_URL) || request.nextUrl.origin;
+  if (origin && origin !== expected) return fail();
+  if (request.headers.get("sec-fetch-site") === "cross-site") return fail();
+  if (request.headers.get("x-noirly-csrf") !== "1") return fail();
+  return null;
+}
+
+export const proxy = auth(async (request) => {
   const { pathname } = request.nextUrl;
+
+  if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth/")) {
+    if (!selfAuthenticated(request)) {
+      const rejection = csrfRejection(request);
+      if (rejection) return rejection;
+    }
+    try {
+      const ip =
+        request.headers.get(process.env.TRUSTED_CLIENT_IP_HEADER ?? "x-forwarded-for")?.split(",").at(-1)?.trim() ??
+        "unknown";
+      const limit = await consumeRateLimit(`ledger-api:${ip}`, 300, 60);
+      if (!limit.allowed) {
+        return NextResponse.json(
+          { error: "rate_limited", message: "Too many requests. Try again shortly." },
+          { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+        );
+      }
+    } catch {
+      return NextResponse.json({ error: "temporarily_unavailable" }, { status: 503 });
+    }
+  }
   const isLanding = pathname === "/";
   // Readable without an account (Google Play links to the privacy policy).
   const isPublicPage = pathname === "/privacy";

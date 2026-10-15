@@ -28,7 +28,7 @@ import type {
   WorkspaceWithRole,
 } from "@/src/core/sync/types";
 import type { ApprovalStatus, MemberRole } from "@/src/core/models/enums";
-import { convertToBaseMinor, FX_RATE_SCALE } from "@/src/core/money";
+import { toBaseAmount } from "@/src/server/fx";
 import { dashboardRange, isoDate, periodWindow } from "@/src/core/budgets/period";
 import { withDb } from "@/src/server/db/mongodb";
 import {
@@ -57,7 +57,14 @@ import {
 } from "@/src/server/mappers";
 import { ApiError } from "@/src/server/api/http";
 import { seedSystemCategories } from "@/src/server/categories/seed";
-import { listMembers, requireAction } from "@/src/server/workspace/members";
+import { listMembers, requireAction, requireMembershipRole } from "@/src/server/workspace/members";
+import { can } from "@/src/core/permissions/can";
+import {
+  afterCursorFilter,
+  decodeTransactionCursor,
+  encodeTransactionCursor,
+} from "@/src/server/transactions/cursor";
+import { receiptUrlFor, receiptWorkspaceId } from "@/src/server/storage/receipt-keys";
 import { publishMany } from "@/src/server/realtime/publish";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
@@ -67,11 +74,49 @@ type ProviderContext = {
 };
 
 function oid(id: string) {
+  if (typeof id !== "string" || !/^[a-f0-9]{24}$/i.test(id)) {
+    throw new ApiError(400, "invalid_request", "Invalid id");
+  }
   return new Types.ObjectId(id);
 }
 
 function optionalOid(id: string | null | undefined) {
   return id ? oid(id) : null;
+}
+
+/** A category id must name a live category of the same workspace. */
+async function assertCategory(workspaceId: Types.ObjectId, categoryId: string | null | undefined) {
+  if (!categoryId) return;
+  const exists = await CategoryModel.exists({
+    _id: oid(categoryId),
+    workspaceId,
+    deletedAt: null,
+  });
+  if (!exists) throw new ApiError(400, "invalid_request", "Category is not in this workspace");
+}
+
+/**
+ * A receipt key must have been uploaded to this workspace. The link is built
+ * from it here; a URL sent by the client is never stored.
+ */
+function receiptFields(workspaceId: Types.ObjectId, key: string | null | undefined) {
+  if (!key) return { receiptStorageKey: null, receiptUrl: null };
+  if (receiptWorkspaceId(key) !== workspaceId.toString()) {
+    throw new ApiError(400, "invalid_request", "Receipt is not in this workspace");
+  }
+  return { receiptStorageKey: key, receiptUrl: receiptUrlFor(key) };
+}
+
+/**
+ * Who may change a transaction: whoever created it, or the workspace owner.
+ * (In a personal workspace that's the same person.)
+ */
+async function requireTransactionEditor(userId: string, doc: { workspaceId: Types.ObjectId; createdById: Types.ObjectId }) {
+  const role = await requireMembershipRole(userId, doc.workspaceId.toString());
+  if (doc.createdById.toString() !== userId && !can(role, "workspace.manage")) {
+    throw new ApiError(403, "forbidden", "You can only change transactions you added");
+  }
+  return role;
 }
 
 async function requireMembership(userId: string, workspaceId: string) {
@@ -94,30 +139,6 @@ async function requireWorkspace(userId: string, workspaceId: string) {
   return workspace;
 }
 
-async function toBaseAmount(input: {
-  workspaceId: Types.ObjectId;
-  amountMinor: number;
-  currency: string;
-  baseCurrency: string;
-  asOf: Date;
-}): Promise<number> {
-  if (input.currency === input.baseCurrency) {
-    return input.amountMinor;
-  }
-  const rate = await FxRateModel.findOne({
-    workspaceId: input.workspaceId,
-    currency: input.currency,
-    effectiveFrom: { $lte: input.asOf },
-  }).sort({ effectiveFrom: -1 });
-  if (!rate) {
-    throw new ApiError(
-      400,
-      "missing_fx_rate",
-      `Set an FX rate for ${input.currency} → ${input.baseCurrency} in Settings → Currency`,
-    );
-  }
-  return convertToBaseMinor(input.amountMinor, rate.rateToBaseScaled, FX_RATE_SCALE);
-}
 
 export function createMongoLedgerProvider(
   ctx: ProviderContext,
@@ -202,7 +223,7 @@ export function createMongoLedgerProvider(
 
     async createCategory(input: CreateCategoryInput): Promise<Category> {
       return withDb(async () => {
-        await requireMembership(ctx.userId, input.workspaceId);
+        await requireAction(ctx.userId, input.workspaceId, "budget.manage");
         const doc = await CategoryModel.create({
           workspaceId: oid(input.workspaceId),
           name: input.name.trim(),
@@ -218,7 +239,7 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const doc = await CategoryModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Category not found");
-        await requireMembership(ctx.userId, doc.workspaceId.toString());
+        await requireAction(ctx.userId, doc.workspaceId.toString(), "budget.manage");
         if (patch.name) doc.name = patch.name;
         if (patch.icon) doc.icon = patch.icon;
         if (patch.color) doc.color = patch.color;
@@ -231,7 +252,7 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const doc = await CategoryModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Category not found");
-        await requireMembership(ctx.userId, doc.workspaceId.toString());
+        await requireAction(ctx.userId, doc.workspaceId.toString(), "budget.manage");
         if (doc.isSystem) {
           doc.archivedAt = new Date();
         } else {
@@ -264,17 +285,29 @@ export function createMongoLedgerProvider(
             ...(query.to ? { $lte: new Date(`${query.to}T23:59:59.999Z`) } : {}),
           };
         }
+        let after: ReturnType<typeof afterCursorFilter> | null = null;
         if (query.cursor) {
-          filter._id = { $lt: oid(query.cursor) };
+          let position = decodeTransactionCursor(query.cursor);
+          // Older clients may still hold a bare-id cursor from before.
+          if (!position) {
+            const previous = await TransactionModel.findOne({
+              _id: oid(query.cursor),
+              workspaceId: oid(query.workspaceId),
+            }).select("date");
+            if (!previous) throw new ApiError(400, "invalid_request", "Invalid cursor");
+            position = { date: previous.date, id: previous._id };
+          }
+          after = afterCursorFilter(position);
         }
-        const docs = await TransactionModel.find(filter)
+        const docs = await TransactionModel.find(after ? { $and: [filter, after] } : filter)
           .sort({ date: -1, _id: -1 })
           .limit(limit + 1);
         const extra = docs.length > limit;
         const page = extra ? docs.slice(0, limit) : docs;
+        const last = page[page.length - 1];
         return {
           items: page.map((doc) => mapTransaction(doc)),
-          nextCursor: extra ? page[page.length - 1]?._id.toString() : undefined,
+          nextCursor: extra && last ? encodeTransactionCursor(last) : undefined,
         };
       });
     },
@@ -291,6 +324,8 @@ export function createMongoLedgerProvider(
     async createTransaction(input: CreateTransactionInput): Promise<Transaction> {
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
+        await assertCategory(workspace._id, input.categoryId);
+        const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
         const baseAmountMinor = await toBaseAmount({
           workspaceId: workspace._id,
@@ -315,8 +350,7 @@ export function createMongoLedgerProvider(
           categoryId: optionalOid(input.categoryId),
           date: asOf,
           note: input.note ?? null,
-          receiptUrl: input.receiptUrl ?? null,
-          receiptStorageKey: input.receiptStorageKey ?? null,
+          ...receipt,
           isRecurring: Boolean(recurrence),
           recurrence,
           createdById: oid(ctx.userId),
@@ -341,15 +375,23 @@ export function createMongoLedgerProvider(
         const doc = await TransactionModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
         const workspace = await requireWorkspace(ctx.userId, doc.workspaceId.toString());
+        await requireTransactionEditor(ctx.userId, doc);
+        // A pool expense is reviewed as submitted; changing it afterwards would
+        // skip approval and leave the pool's total wrong.
+        if (doc.budgetPoolId) {
+          throw new ApiError(409, "pool_expense_locked", "Pool expenses can't be edited. Delete it and submit a new one.");
+        }
+        if (patch.categoryId !== undefined) await assertCategory(workspace._id, patch.categoryId);
         if (patch.type) doc.type = patch.type;
         if (patch.amountMinor != null) doc.amountMinor = patch.amountMinor;
         if (patch.currency) doc.currency = patch.currency;
         if (patch.categoryId !== undefined) doc.categoryId = optionalOid(patch.categoryId);
         if (patch.date) doc.date = new Date(`${patch.date}T12:00:00.000Z`);
         if (patch.note !== undefined) doc.note = patch.note;
-        if (patch.receiptUrl !== undefined) doc.receiptUrl = patch.receiptUrl;
         if (patch.receiptStorageKey !== undefined) {
-          doc.receiptStorageKey = patch.receiptStorageKey;
+          const receipt = receiptFields(workspace._id, patch.receiptStorageKey);
+          doc.receiptStorageKey = receipt.receiptStorageKey;
+          doc.receiptUrl = receipt.receiptUrl;
         }
         if (patch.recurrence !== undefined) {
           doc.recurrence = patch.recurrence
@@ -379,9 +421,35 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const doc = await TransactionModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
-        await requireMembership(ctx.userId, doc.workspaceId.toString());
-        doc.deletedAt = new Date();
-        await doc.save();
+        await requireTransactionEditor(ctx.userId, doc);
+        if (doc.budgetPoolId && doc.approvalRequestId) {
+          const approval = await ApprovalModel.findById(doc.approvalRequestId);
+          if (approval?.status === "approved") {
+            // Spent money leaves the pool total only by the owner's hand.
+            await requireAction(ctx.userId, doc.workspaceId.toString(), "workspace.manage");
+          }
+        }
+        // Claim the delete first, so two requests can't both adjust the pool.
+        const claimed = await TransactionModel.findOneAndUpdate(
+          { _id: doc._id, deletedAt: null },
+          { $set: { deletedAt: new Date() } },
+        );
+        if (!claimed) throw new ApiError(404, "not_found", "Transaction not found");
+        if (doc.budgetPoolId && doc.approvalRequestId) {
+          const approval = await ApprovalModel.findById(doc.approvalRequestId);
+          if (approval?.status === "approved") {
+            await BudgetPoolModel.updateOne(
+              { _id: doc.budgetPoolId },
+              { $inc: { currentSpendMinor: -doc.baseAmountMinor } },
+            );
+          } else if (approval?.status === "submitted") {
+            // Withdrawn before review: it leaves the approvers' inbox.
+            await ApprovalModel.updateOne(
+              { _id: approval._id, status: "submitted" },
+              { $set: { status: "cancelled", reviewedAt: new Date() } },
+            );
+          }
+        }
       });
     },
 
@@ -396,6 +464,8 @@ export function createMongoLedgerProvider(
     async upsertBudget(input: UpsertBudgetInput): Promise<Budget> {
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
+        await requireAction(ctx.userId, input.workspaceId, "budget.manage");
+        await assertCategory(workspace._id, input.categoryId);
         const doc = await BudgetModel.findOneAndUpdate(
           {
             workspaceId: workspace._id,
@@ -428,7 +498,7 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const doc = await BudgetModel.findById(id);
         if (!doc) throw new ApiError(404, "not_found", "Budget not found");
-        await requireMembership(ctx.userId, doc.workspaceId.toString());
+        await requireAction(ctx.userId, doc.workspaceId.toString(), "budget.manage");
         await doc.deleteOne();
       });
     },
@@ -502,16 +572,28 @@ export function createMongoLedgerProvider(
 
     async contributeToGoal(id: string, amountMinor: number): Promise<SavingsGoal> {
       return withDb(async () => {
-        const doc = await SavingsGoalModel.findById(id);
-        if (!doc) throw new ApiError(404, "not_found", "Goal not found");
-        await requireMembership(ctx.userId, doc.workspaceId.toString());
-        const wasComplete = Boolean(doc.completedAt);
-        doc.currentAmountMinor += amountMinor;
-        if (doc.currentAmountMinor >= doc.targetAmountMinor && !doc.completedAt) {
-          doc.completedAt = new Date();
-        }
-        await doc.save();
-        if (!wasComplete && doc.completedAt) {
+        const existing = await SavingsGoalModel.findById(oid(id)).select("workspaceId");
+        if (!existing) throw new ApiError(404, "not_found", "Goal not found");
+        await requireMembership(ctx.userId, existing.workspaceId.toString());
+        // $inc in the database, so two contributions at once both count.
+        const added = await SavingsGoalModel.findOneAndUpdate(
+          { _id: existing._id },
+          { $inc: { currentAmountMinor: amountMinor } },
+          { returnDocument: "after" },
+        );
+        if (!added) throw new ApiError(404, "not_found", "Goal not found");
+        // Only the contribution that crosses the target marks it complete.
+        const completed = await SavingsGoalModel.findOneAndUpdate(
+          {
+            _id: existing._id,
+            completedAt: null,
+            $expr: { $gte: ["$currentAmountMinor", "$targetAmountMinor"] },
+          },
+          { $set: { completedAt: new Date() } },
+          { returnDocument: "after" },
+        );
+        const doc = completed ?? added;
+        if (completed) {
           await notifyUsers({
             userIds: [ctx.userId],
             workspaceId: doc.workspaceId.toString(),
@@ -539,7 +621,15 @@ export function createMongoLedgerProvider(
       status?: ApprovalStatus[];
     }): Promise<ApprovalView[]> {
       return withDb(async () => {
-        await requireMembership(ctx.userId, query.workspaceId);
+        const membership = await requireMembership(ctx.userId, query.workspaceId);
+        const isDecider = can(membership.role as MemberRole, "expense.decide");
+        const otherDecider = isDecider
+          ? Boolean(await WorkspaceMember.exists({
+              workspaceId: oid(query.workspaceId),
+              userId: { $ne: oid(ctx.userId) },
+              role: { $in: ["owner", "approver"] },
+            }))
+          : false;
         const filter: Record<string, unknown> = {
           workspaceId: oid(query.workspaceId),
         };
@@ -562,6 +652,9 @@ export function createMongoLedgerProvider(
               ...mapApproval(doc),
               transaction: mapTransaction(txn),
               submitterName: user?.displayName ?? "Unknown",
+              // Mirrors decideApproval's rule, so the inbox never offers a
+              // button the server will refuse.
+              canDecide: isDecider && (doc.submittedById.toString() !== ctx.userId || !otherDecider),
             },
           ];
         });
@@ -581,6 +674,8 @@ export function createMongoLedgerProvider(
           archivedAt: null,
         });
         if (!pool) throw new ApiError(404, "not_found", "Budget pool not found");
+        await assertCategory(workspace._id, input.categoryId);
+        const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
         const baseAmountMinor = await toBaseAmount({
           workspaceId: workspace._id,
@@ -599,8 +694,7 @@ export function createMongoLedgerProvider(
           budgetPoolId: pool._id,
           date: asOf,
           note: input.note ?? null,
-          receiptUrl: input.receiptUrl ?? null,
-          receiptStorageKey: input.receiptStorageKey ?? null,
+          ...receipt,
           createdById: oid(ctx.userId),
           isPosted: false,
         });
@@ -663,6 +757,28 @@ export function createMongoLedgerProvider(
         if (!existing) throw new ApiError(404, "not_found", "Approval not found");
         await requireAction(ctx.userId, existing.workspaceId.toString(), "expense.decide");
 
+        // Nobody reviews their own expense, unless nobody else in the
+        // workspace can (a team of one).
+        if (existing.submittedById.toString() === ctx.userId) {
+          const otherDecider = await WorkspaceMember.exists({
+            workspaceId: existing.workspaceId,
+            userId: { $ne: oid(ctx.userId) },
+            role: { $in: ["owner", "approver"] },
+          });
+          if (otherDecider) {
+            throw new ApiError(403, "forbidden", "Someone else has to review your own expense");
+          }
+        }
+
+        const pending = await TransactionModel.exists({ _id: existing.transactionId, deletedAt: null });
+        if (!pending) {
+          await ApprovalModel.updateOne(
+            { _id: existing._id, status: "submitted" },
+            { $set: { status: "cancelled", reviewedAt: new Date() } },
+          );
+          throw new ApiError(409, "conflict", "This expense was withdrawn");
+        }
+
         const approval = await ApprovalModel.findOneAndUpdate(
           { _id: existing._id, status: "submitted" },
           {
@@ -679,8 +795,12 @@ export function createMongoLedgerProvider(
           throw new ApiError(409, "conflict", "This expense was already decided");
         }
 
-        const txn = await TransactionModel.findById(approval.transactionId);
-        if (!txn) throw new ApiError(404, "not_found", "Transaction not found");
+        const txn = await TransactionModel.findOne({ _id: approval.transactionId, deletedAt: null });
+        if (!txn) {
+          // Withdrawn in the moment between the check above and this decision.
+          await ApprovalModel.updateOne({ _id: approval._id }, { $set: { status: "cancelled" } });
+          throw new ApiError(409, "conflict", "This expense was withdrawn");
+        }
         const pool = await BudgetPoolModel.findById(approval.budgetPoolId);
         if (!pool) throw new ApiError(404, "not_found", "Budget pool not found");
 
@@ -787,7 +907,8 @@ export function createMongoLedgerProvider(
 
     async upsertFxRate(input: UpsertFxRateInput): Promise<FxRate> {
       return withDb(async () => {
-        await requireMembership(ctx.userId, input.workspaceId);
+        // Rates change every member's converted totals.
+        await requireAction(ctx.userId, input.workspaceId, "fx.manage");
         const effectiveFrom = new Date(`${input.effectiveFrom}T00:00:00.000Z`);
         const doc = await FxRateModel.findOneAndUpdate(
           {

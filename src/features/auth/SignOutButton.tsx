@@ -13,6 +13,8 @@ export function SignOutButton() {
     try {
       await signOut({ callbackUrl: "/login", redirect: true });
     } catch {
+      // A full load on purpose: nothing from the signed-in session stays in memory.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.assign("/login");
     }
   }

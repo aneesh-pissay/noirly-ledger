@@ -5,6 +5,7 @@ export const PERMISSIONS = [
   "workspace.manage",
   "members.manage",
   "pool.manage",
+  "budget.manage",
   "expense.submit",
   "expense.decide",
   "report.export",
@@ -24,6 +25,8 @@ const requiredRank: Record<PermissionAction, number> = {
   "expense.submit": 1,
   "report.export": 1,
   "pool.manage": 2,
+  /** Categories and category budgets shape everyone's reports. */
+  "budget.manage": 2,
   "expense.decide": 2,
   "fx.manage": 2,
   "workspace.manage": 3,

@@ -1,12 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import { DURATION, EASE_OUT, SPRING } from "@noirly-dev/ui/motion";
 import { cn } from "@noirly-dev/ui";
 
 const THEME_STORAGE_KEY = "theme";
+
+/** The `dark` class on <html> is the source of truth; watch it rather than copy it. */
+function subscribeTheme(notify: () => void) {
+  const observer = new MutationObserver(notify);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
+const readDark = () => document.documentElement.classList.contains("dark");
 
 type Props = {
   className?: string;
@@ -15,23 +23,16 @@ type Props = {
 };
 
 export function ThemeToggle({ className, size = "md" }: Props) {
-  const [isDark, setIsDark] = useState(true);
-
-  useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
-  }, []);
+  const isDark = useSyncExternalStore(subscribeTheme, readDark, () => true);
 
   const toggleTheme = useCallback(() => {
-    setIsDark((prev) => {
-      const next = !prev;
-      document.documentElement.classList.toggle("dark", next);
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
-      } catch {
-        /* private mode — class swap still applies for this session */
-      }
-      return next;
-    });
+    const next = !readDark();
+    document.documentElement.classList.toggle("dark", next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next ? "dark" : "light");
+    } catch {
+      /* private mode — class swap still applies for this session */
+    }
   }, []);
 
   return (

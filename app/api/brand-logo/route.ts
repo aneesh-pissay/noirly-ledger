@@ -22,7 +22,12 @@ export async function GET(request: Request) {
 
   let upstream: Response;
   try {
-    upstream = await fetch(absolute, { next: { revalidate: 3600 } });
+    // No redirects: an allowed URL must not bounce the server somewhere else.
+    upstream = await fetch(absolute, {
+      redirect: "error",
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 3600 },
+    });
   } catch {
     return new Response("Failed to fetch logo", { status: 502 });
   }

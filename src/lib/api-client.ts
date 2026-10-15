@@ -24,6 +24,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (init?.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  // Proves the request came from this app's own scripts (see proxy.ts).
+  headers.set("X-Noirly-CSRF", "1");
   const response = await fetch(path, { ...init, headers });
   if (response.status === 204) return undefined as T;
   const data = (await response.json().catch(() => ({}))) as T & ApiErrorBody;
@@ -264,7 +266,7 @@ export const api = {
   ) {
     const response = await fetch(`/api/workspaces/${workspaceId}/exports`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Noirly-CSRF": "1" },
       body: JSON.stringify(body),
     });
     if (!response.ok) {

@@ -17,18 +17,18 @@ export default async function WorkspaceLayout({
   const { workspaceId } = await params;
   const { sync } = await getLedgerProvider();
 
-  try {
-    const workspace = await sync.getWorkspace(workspaceId);
-    return (
-      <WorkspaceRoleProvider role={workspace.role}>
-        <WorkspaceRealtime workspaceId={workspaceId} />
-        {children}
-      </WorkspaceRoleProvider>
-    );
-  } catch (error) {
-    if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+  const workspace = await sync.getWorkspace(workspaceId).catch((error: unknown) => {
+    // Not a member, or no such workspace: the same 404 either way.
+    if (error instanceof ApiError && (error.status === 400 || error.status === 403 || error.status === 404)) {
       notFound();
     }
     throw error;
-  }
+  });
+
+  return (
+    <WorkspaceRoleProvider role={workspace.role}>
+      <WorkspaceRealtime workspaceId={workspaceId} />
+      {children}
+    </WorkspaceRoleProvider>
+  );
 }
