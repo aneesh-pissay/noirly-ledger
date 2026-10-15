@@ -1,7 +1,8 @@
+import { safeLocalPath } from "@/src/lib/safe-path";
 import { signIn } from "@/auth";
 
 function safeNext(value?: string | null): string {
-  return value && value.startsWith("/") && !value.startsWith("//") ? value : "/home";
+  return safeLocalPath(value, "/home");
 }
 
 /**

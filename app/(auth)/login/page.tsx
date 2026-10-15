@@ -1,3 +1,4 @@
+import { safeLocalPath } from "@/src/lib/safe-path";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthShell } from "@noirly-dev/ui";
@@ -18,7 +19,7 @@ export default async function LoginPage({
   // Only same-origin paths. `//evil.com` is a valid relative-protocol URL, so
   // the leading-slash check alone would be an open redirect.
   const redirectTo =
-    next && next.startsWith("/") && !next.startsWith("//") ? next : "/home";
+    safeLocalPath(next, "/home");
 
   return (
     <AuthShell

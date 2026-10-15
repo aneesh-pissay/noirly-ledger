@@ -1,5 +1,7 @@
 "use client";
 
+import { safeLocalPath } from "@/src/lib/safe-path";
+
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@noirly-dev/ui";
@@ -13,7 +15,7 @@ const BUILD_IDENTITY_URL = process.env.NEXT_PUBLIC_IDENTITY_URL ?? "http://local
 const noSubscribe = () => () => {};
 
 function safeNext(value: string): string {
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/home";
+  return safeLocalPath(value, "/home");
 }
 
 function readAuthPayload(): { next?: string } | null {
