@@ -1,5 +1,6 @@
 import type {
   Account,
+  NetWorth,
   ApprovalRequest,
   ApprovalView,
   Budget,
@@ -144,6 +145,9 @@ export const api = {
   },
   updateAccount(accountId: string, body: { name?: string; archived?: boolean; openingMajor?: string; institution?: string | null }) {
     return request<{ account: Account }>(`/api/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  getNetWorth(workspaceId: string, months = 12) {
+    return request<{ netWorth: NetWorth }>(`/api/workspaces/${workspaceId}/net-worth?months=${months}`);
   },
   reconcileAccount(accountId: string, body: { statementMajor: string; through: string }) {
     return request<{ account: Account; reconciled: number }>(`/api/accounts/${accountId}/reconcile`, { method: "POST", body: JSON.stringify(body) });

@@ -12,6 +12,7 @@ import { ACCOUNT_KINDS, ACCOUNT_KIND_LABEL, isLiability, type AccountKind } from
 import type { Account } from "@/src/core/sync/types";
 import { MoneyText } from "@/src/components/MoneyText";
 import { Select } from "@/src/components/Select";
+import { NetWorthPanel } from "@/src/features/accounts/NetWorthPanel";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -141,6 +142,7 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
       <p className="mt-1 text-sm text-[var(--muted-foreground)]">
         Pick an account when you add a transaction and its balance follows. Each account keeps its own currency.
       </p>
+      <NetWorthPanel workspaceId={workspaceId} />
 
       <form
         className="mt-6 grid gap-3 surface grain rounded-[var(--r-lg)] p-4 sm:grid-cols-2"

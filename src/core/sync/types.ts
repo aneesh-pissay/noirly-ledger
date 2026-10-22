@@ -392,3 +392,16 @@ export interface LedgerSyncProvider {
     preset: DateRangePreset,
   ): Promise<DashboardSummary>;
 }
+
+/** What a workspace has and owes across its accounts, in its base currency. */
+export type NetWorth = {
+  baseCurrency: string;
+  assetsMinor: MoneyMinor;
+  liabilitiesMinor: MoneyMinor;
+  netMinor: MoneyMinor;
+  /** baseBalanceMinor is null when the account's currency has no FX rate yet. */
+  accounts: Array<{ id: string; name: string; kind: AccountKind; currency: string; archived: boolean; balanceMinor: MoneyMinor; baseBalanceMinor: MoneyMinor | null }>;
+  /** Month ends, then today. */
+  history: Array<{ date: string; assetsMinor: MoneyMinor; liabilitiesMinor: MoneyMinor; netMinor: MoneyMinor }>;
+  missingRates: string[];
+};
