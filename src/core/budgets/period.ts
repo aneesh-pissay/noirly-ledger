@@ -53,10 +53,16 @@ export function periodWindow(
 }
 
 export function dashboardRange(
-  preset: "7d" | "30d" | "90d" | "mtd",
+  preset: "7d" | "30d" | "90d" | "mtd" | "fy",
   at = new Date(),
+  fiscalYearStartMonth = 1,
 ): DateRange {
   const to = endOfUtcDay(at);
+  if (preset === "fy") {
+    // From the first day of the financial year that today falls in.
+    const startYear = at.getUTCMonth() + 1 >= fiscalYearStartMonth ? at.getUTCFullYear() : at.getUTCFullYear() - 1;
+    return { from: new Date(Date.UTC(startYear, fiscalYearStartMonth - 1, 1)), to };
+  }
   if (preset === "mtd") {
     return {
       from: new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1)),

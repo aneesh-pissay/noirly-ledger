@@ -22,6 +22,7 @@ import type {
   Workspace,
   WorkspaceWithRole,
 } from "@/src/core/sync/types";
+import type { NumberFormat } from "@/src/core/locale-format";
 
 type ApiErrorBody = { error?: string; message?: string };
 
@@ -55,6 +56,12 @@ export const api = {
   },
   listWorkspaces() {
     return request<{ workspaces: WorkspaceWithRole[] }>("/api/workspaces");
+  },
+  updateMe(body: { numberFormat: NumberFormat }) {
+    return request<{ numberFormat: NumberFormat }>("/api/me", { method: "PATCH", body: JSON.stringify(body) });
+  },
+  updateWorkspaceSettings(workspaceId: string, body: { fiscalYearStartMonth: number }) {
+    return request<{ workspace: Workspace }>(`/api/workspaces/${workspaceId}/settings`, { method: "PATCH", body: JSON.stringify(body) });
   },
   createWorkspace(input: { name: string; baseCurrency?: string }) {
     return request<{ workspace: Workspace }>("/api/workspaces", {

@@ -6,7 +6,8 @@ import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YA
 import { StatCell, StatGroup } from "@noirly-dev/ui";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
-import { formatMinorToMajor } from "@/src/core/money";
+import { formatGrouped } from "@/src/core/locale-format";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { AccessibleChart } from "@/src/components/AccessibleChart";
 
 const tooltipStyle = {
@@ -19,9 +20,10 @@ const tooltipStyle = {
 /** Assets, what's owed and net worth across all accounts in the base currency, with the last year's trend. */
 export function NetWorthPanel({ workspaceId }: { workspaceId: string }) {
   const query = useQuery({ queryKey: qk.netWorth(workspaceId), queryFn: () => api.getNetWorth(workspaceId) });
+  const { money: format, amount, format: numberFormat } = useMoneyFormat();
   const data = query.data?.netWorth;
   if (!data || !data.accounts.length) return null;
-  const money = (minor: number) => `${formatMinorToMajor(minor)} ${data.baseCurrency}`;
+  const money = (minor: number) => format(minor, data.baseCurrency);
   // The chart runs from the first month any account was open.
   const history = data.history.slice(Math.max(0, data.history.findIndex((point) => point.assetsMinor || point.liabilitiesMinor)));
 
@@ -55,16 +57,16 @@ export function NetWorthPanel({ workspaceId }: { workspaceId: string }) {
           ]}
           rows={history.map((point) => ({
             date: point.date,
-            assets: formatMinorToMajor(point.assetsMinor),
-            liabilities: formatMinorToMajor(point.liabilitiesMinor),
-            net: formatMinorToMajor(point.netMinor),
+            assets: amount(point.assetsMinor, data.baseCurrency),
+            liabilities: amount(point.liabilitiesMinor, data.baseCurrency),
+            net: amount(point.netMinor, data.baseCurrency),
           }))}
         >
           <ResponsiveContainer>
             <LineChart data={history.map((point) => ({ date: point.date, net: point.netMinor }))}>
               <CartesianGrid stroke="var(--hairline)" vertical={false} />
               <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={10} />
-              <YAxis stroke="var(--text-muted)" fontSize={10} tickFormatter={(minor: number) => String(Math.round(minor / 100))} />
+              <YAxis stroke="var(--text-muted)" fontSize={10} tickFormatter={(minor: number) => formatGrouped(Math.round(minor / 100) * 100, data.baseCurrency, numberFormat, 0)} />
               <Tooltip contentStyle={tooltipStyle} formatter={(minor) => [money(Number(minor)), "Net worth"]} />
               <Line type="linear" dataKey="net" stroke="var(--accent)" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={false} />
             </LineChart>

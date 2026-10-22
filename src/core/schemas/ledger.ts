@@ -6,6 +6,7 @@ import {
 } from "@/src/core/models/enums";
 import { ACCOUNT_KINDS } from "@/src/core/accounts";
 import { CLEARING_STATES } from "@/src/core/clearing";
+import { NUMBER_FORMATS } from "@/src/core/locale-format";
 
 export const currencyCode = z
   .string()
@@ -139,7 +140,7 @@ export const exportBodySchema = z.object({
 });
 
 export const dashboardQuerySchema = z.object({
-  range: z.enum(["7d", "30d", "90d", "mtd"]).default("mtd"),
+  range: z.enum(["7d", "30d", "90d", "mtd", "fy"]).default("mtd"),
 });
 
 export const createPoolBodySchema = z.object({
@@ -182,6 +183,14 @@ export const updateProjectBodySchema = createProjectBodySchema
   .partial()
   .extend({ archived: z.boolean().optional() })
   .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
+
+export const workspaceSettingsBodySchema = z.object({
+  fiscalYearStartMonth: z.number().int().min(1).max(12),
+});
+
+export const meSettingsBodySchema = z.object({
+  numberFormat: z.enum(NUMBER_FORMATS),
+});
 
 /** A statement to reconcile an account to: its closing balance and the last day it covers. */
 export const reconcileAccountBodySchema = z.object({

@@ -20,7 +20,7 @@ export default async function AppGroupLayout({
 
   return (
     <AppShell
-      user={{ displayName: ctx.displayName, email: ctx.email }}
+      user={{ displayName: ctx.displayName, email: ctx.email, numberFormat: ctx.numberFormat }}
       workspaces={workspaces}
     >
       {children}

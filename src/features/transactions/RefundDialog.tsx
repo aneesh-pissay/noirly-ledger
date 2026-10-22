@@ -6,6 +6,7 @@ import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { createTransactionBodySchema } from "@/src/core/schemas/ledger";
 import { formatMinorToMajor } from "@/src/core/money";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { isoDate } from "@/src/core/budgets/period";
 import type { Transaction } from "@/src/core/sync/types";
 import { Button, Dialog, Input, Label } from "@noirly-dev/ui";
@@ -30,6 +31,7 @@ export function RefundDialog({ workspaceId, expense, onClose }: Props) {
 function RefundForm({ workspaceId, expense, onClose }: { workspaceId: string; expense: Transaction; onClose: () => void }) {
   const queryClient = useQueryClient();
   const left = expense.amountMinor - expense.refundedMinor;
+  const { money } = useMoneyFormat();
   const [amount, setAmount] = useState(formatMinorToMajor(left));
   const [date, setDate] = useState(isoDate(new Date()));
   const [note, setNote] = useState("");
@@ -70,7 +72,7 @@ function RefundForm({ workspaceId, expense, onClose }: { workspaceId: string; ex
       }}
     >
       <p className="text-sm text-[var(--muted-foreground)]">
-        {expense.note ?? "Expense"} on {expense.date}: {formatMinorToMajor(left)} {expense.currency} left to refund.
+        {expense.note ?? "Expense"} on {expense.date}: {money(left, expense.currency)} left to refund.
       </p>
       <div className="grid grid-cols-2 gap-3">
         <div>

@@ -88,7 +88,7 @@ test.describe("transfers", () => {
 
     await page.goto("/accounts");
     await expect(page.locator('[data-account="Checking"]')).toContainText("450.00 USD");
-    await expect(page.locator('[data-account="SBI"]')).toContainText("4150.00 INR");
+    await expect(page.locator('[data-account="SBI"]')).toContainText("4,150.00 INR");
     await page.screenshot({ path: "test-results/transfer-accounts.png", fullPage: true });
     await context.close();
   });

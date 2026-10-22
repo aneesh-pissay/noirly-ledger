@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { isoDate } from "@/src/core/budgets/period";
+import { fiscalYear } from "@/src/core/locale-format";
 import { Button, PageContainer } from "@noirly-dev/ui";
 import { Label } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
@@ -12,13 +13,17 @@ import { Select } from "@/src/components/Select";
 type Props = {
   workspaceId: string;
   kind: "personal" | "team";
+  /** Month (1–12) the workspace's financial year starts in, for the year shortcuts. */
+  fiscalYearStartMonth?: number;
 };
 
 function monthStart(at = new Date()) {
   return isoDate(new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1)));
 }
 
-export function ReportBuilder({ workspaceId, kind }: Props) {
+export function ReportBuilder({ workspaceId, kind, fiscalYearStartMonth = 1 }: Props) {
+  const thisYear = fiscalYear(isoDate(new Date()), fiscalYearStartMonth);
+  const lastYear = fiscalYear(isoDate(new Date()), fiscalYearStartMonth, -1);
   const [format, setFormat] = useState<"csv" | "pdf">("csv");
   const [template, setTemplate] = useState<"summary" | "pool" | "approvals">(
     kind === "team" ? "pool" : "summary",
@@ -95,6 +100,16 @@ export function ReportBuilder({ workspaceId, kind }: Props) {
               className="w-full rounded-lg border border-[var(--hairline)] bg-[var(--surface-2)] px-3 py-2 text-sm"
               required
             />
+          </div>
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
+            {[
+              { label: `This year (${thisYear.label})`, from: thisYear.from, to: isoDate(new Date()) },
+              { label: `Last year (${lastYear.label})`, from: lastYear.from, to: lastYear.to },
+            ].map((range) => (
+              <Button key={range.label} type="button" variant="ghost" size="sm" onClick={() => { setFrom(range.from); setTo(range.to); }}>
+                {range.label}
+              </Button>
+            ))}
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">

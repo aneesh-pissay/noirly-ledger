@@ -27,6 +27,8 @@ export type Workspace = {
   slug: string;
   ownerUserId: string;
   baseCurrency: string;
+  /** Month (1–12) its financial year starts in. */
+  fiscalYearStartMonth: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -342,7 +344,8 @@ export type UpsertFxRateInput = {
   effectiveFrom: string;
 };
 
-export type DateRangePreset = "7d" | "30d" | "90d" | "mtd";
+/** "fy" is the financial year to date. */
+export type DateRangePreset = "7d" | "30d" | "90d" | "mtd" | "fy";
 
 export type DashboardSummary = {
   baseCurrency: string;

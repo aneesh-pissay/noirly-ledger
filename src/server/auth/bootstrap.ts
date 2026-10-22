@@ -1,5 +1,6 @@
 import { withDb } from "@/src/server/db/mongodb";
 import { seedSystemCategories } from "@/src/server/categories/seed";
+import { defaultFiscalStart, type NumberFormat } from "@/src/core/locale-format";
 import {
   LedgerUser,
   Workspace,
@@ -23,6 +24,7 @@ export type BootstrappedAccount = {
     displayName: string;
     avatarUrl: string | null;
     baseCurrency: string;
+    numberFormat: NumberFormat;
   };
   personalWorkspace: {
     id: string;
@@ -30,6 +32,7 @@ export type BootstrappedAccount = {
     slug: string;
     kind: "personal";
     baseCurrency: string;
+    fiscalYearStartMonth: number;
   };
 };
 
@@ -164,6 +167,7 @@ export async function ensureLedgerAccount(
         displayName: user.displayName,
         avatarUrl: user.avatarUrl ?? null,
         baseCurrency: user.baseCurrency,
+        numberFormat: (user.numberFormat ?? "auto") as NumberFormat,
       },
       personalWorkspace: {
         id: workspace._id.toString(),
@@ -171,6 +175,7 @@ export async function ensureLedgerAccount(
         slug: workspace.slug,
         kind: "personal",
         baseCurrency: workspace.baseCurrency,
+        fiscalYearStartMonth: workspace.fiscalYearStartMonth ?? defaultFiscalStart(workspace.baseCurrency),
       },
     };
   });

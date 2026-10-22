@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Card, CardHeader, CardTitle, Input, Label, PageContainer } from "@noirly-dev/ui";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
-import { formatMinorToMajor } from "@/src/core/money";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import type { Project } from "@/src/core/sync/types";
 
 type Props = { workspaceId: string; baseCurrency: string };
@@ -21,7 +21,8 @@ export function ProjectsScreen({ workspaceId, baseCurrency }: Props) {
   const [color, setColor] = useState("#C9A227");
   const [error, setError] = useState<string | null>(null);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: qk.projects(workspaceId) });
-  const money = (minor: number) => `${formatMinorToMajor(minor)} ${baseCurrency}`;
+  const { money: format } = useMoneyFormat();
+  const money = (minor: number) => format(minor, baseCurrency);
 
   const create = useMutation({
     mutationFn: () => api.createProject(workspaceId, { name: name.trim(), color }),

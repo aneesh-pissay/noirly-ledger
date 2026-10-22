@@ -17,7 +17,7 @@ import {
 } from "recharts";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
-import { formatMinorToMajor } from "@/src/core/money";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { MoneyText } from "@/src/components/MoneyText";
 import { ProgressBar } from "@/src/components/ProgressBar";
 import { AccessibleChart } from "@/src/components/AccessibleChart";
@@ -57,6 +57,7 @@ const RANGES: { id: DateRangePreset; label: string }[] = [
   { id: "7d", label: "7 days" },
   { id: "30d", label: "30 days" },
   { id: "mtd", label: "Month to date" },
+  { id: "fy", label: "Financial year" },
 ];
 
 export function PersonalDashboard({ workspaceId, baseCurrency, displayName }: Props) {
@@ -68,7 +69,8 @@ export function PersonalDashboard({ workspaceId, baseCurrency, displayName }: Pr
   });
   const summary = dash.data?.summary;
 
-  const money = (minor: number) => `${formatMinorToMajor(minor)} ${baseCurrency}`;
+  const { money: format, amount } = useMoneyFormat();
+  const money = (minor: number) => format(minor, baseCurrency);
   const net = summary?.netMinor ?? 0;
   const budgets = summary?.budgets ?? [];
 
@@ -120,7 +122,7 @@ export function PersonalDashboard({ workspaceId, baseCurrency, displayName }: Pr
           ]}
           rows={(summary?.byCategory ?? []).map((row) => ({
             name: row.name,
-            amount: formatMinorToMajor(row.amountMinor),
+            amount: amount(row.amountMinor, baseCurrency),
           }))}
         >
           <ResponsiveContainer>
@@ -151,8 +153,8 @@ export function PersonalDashboard({ workspaceId, baseCurrency, displayName }: Pr
           ]}
           rows={(summary?.overTime ?? []).map((row) => ({
             date: row.date,
-            expense: formatMinorToMajor(row.expenseMinor),
-            income: formatMinorToMajor(row.incomeMinor),
+            expense: amount(row.expenseMinor, baseCurrency),
+            income: amount(row.incomeMinor, baseCurrency),
           }))}
         >
           <ResponsiveContainer>
@@ -176,7 +178,7 @@ export function PersonalDashboard({ workspaceId, baseCurrency, displayName }: Pr
         ]}
         rows={(summary?.overTime ?? []).map((row) => ({
           date: row.date,
-          net: formatMinorToMajor(row.incomeMinor - row.expenseMinor),
+          net: amount(row.incomeMinor - row.expenseMinor, baseCurrency),
         }))}
       >
         <ResponsiveContainer>

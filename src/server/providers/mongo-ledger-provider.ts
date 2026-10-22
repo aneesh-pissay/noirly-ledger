@@ -77,6 +77,7 @@ import { budgetCategoryIds } from "@/src/server/categories/tree";
 import { labelFields } from "@/src/server/labels";
 import { assertTransactionProject } from "@/src/server/projects";
 import { merchantKey } from "@/src/core/labels";
+import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, spentInCategories, storedSplits, type StoredSplit } from "@/src/server/splits";
 
 type ProviderContext = {
@@ -1128,7 +1129,7 @@ export function createMongoLedgerProvider(
     ): Promise<DashboardSummary> {
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, workspaceId);
-        const range = dashboardRange(preset);
+        const range = dashboardRange(preset, new Date(), workspace.fiscalYearStartMonth ?? defaultFiscalStart(workspace.baseCurrency));
         const [txns, categories, budgets] = await Promise.all([
           TransactionModel.find({
             workspaceId: workspace._id,

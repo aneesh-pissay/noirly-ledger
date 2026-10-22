@@ -9,10 +9,11 @@ import { Button, PageContainer } from "@noirly-dev/ui";
 import { Input, Label } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
 import { isoDate } from "@/src/core/budgets/period";
+import { NumbersSettings } from "@/src/features/currency/NumbersSettings";
 
-type Props = { workspaceId: string; baseCurrency: string };
+type Props = { workspaceId: string; baseCurrency: string; fiscalYearStartMonth: number };
 
-export function CurrencyScreen({ workspaceId, baseCurrency }: Props) {
+export function CurrencyScreen({ workspaceId, baseCurrency, fiscalYearStartMonth }: Props) {
   const queryClient = useQueryClient();
   const [currency, setCurrency] = useState("EUR");
   const [rate, setRate] = useState("1.00");
@@ -81,6 +82,8 @@ export function CurrencyScreen({ workspaceId, baseCurrency }: Props) {
           </li>
         ))}
       </ul>
+      {/* The personal workspace is always this person's own, so they can set its year. */}
+      <NumbersSettings workspaceId={workspaceId} fiscalYearStartMonth={fiscalYearStartMonth} canManage />
     </PageContainer>
   );
 }

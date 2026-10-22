@@ -31,6 +31,8 @@ const workspaceSchema = new Schema(
       uppercase: true,
       trim: true,
     },
+    // Month (1–12) the financial year starts in; unset means the default for the base currency (see src/core/locale-format.ts).
+    fiscalYearStartMonth: { type: Number, min: 1, max: 12, default: null },
   },
   { timestamps: true },
 );

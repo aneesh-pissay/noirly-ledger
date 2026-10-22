@@ -79,8 +79,8 @@ test.describe("projections", () => {
     const page = await context.newPage();
     await page.goto("/accounts");
     const panel = page.getByRole("region", { name: "Projections" });
-    await expect(panel).toContainText("1250.00 USD");
-    await expect(panel.locator('[data-projection="Checking"]')).toContainText("Drops to -1200.00 USD");
+    await expect(panel).toContainText("1,250.00 USD");
+    await expect(panel.locator('[data-projection="Checking"]')).toContainText("Drops to -1,200.00 USD");
     await expect(panel.getByRole("list", { name: "Coming up" })).toContainText("Rent · Checking · repeats");
     await expect(panel.getByRole("list", { name: "Coming up" })).toContainText("Card payment · Checking → Visa");
     await page.screenshot({ path: "test-results/projection.png", fullPage: true });

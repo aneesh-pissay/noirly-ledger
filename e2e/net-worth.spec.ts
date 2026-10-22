@@ -62,9 +62,9 @@ test.describe("net worth", () => {
     const page = await context.newPage();
     await page.goto("/accounts");
     const panel = page.getByRole("region", { name: "Net worth" });
-    await expect(panel).toContainText("2500.00 USD");
+    await expect(panel).toContainText("2,500.00 USD");
     await expect(panel).toContainText("900.00 USD");
-    await expect(panel).toContainText("1600.00 USD");
+    await expect(panel).toContainText("1,600.00 USD");
     await expect(panel.getByText("Net worth over time")).toBeVisible();
     await page.screenshot({ path: "test-results/net-worth.png", fullPage: true });
     await panel.getByRole("button", { name: "View as table" }).click();

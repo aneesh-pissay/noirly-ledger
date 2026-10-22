@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, StatCell, StatGroup, Tabs } from "@noirly-dev/ui";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
-import { formatMinorToMajor } from "@/src/core/money";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { isLiability } from "@/src/core/accounts";
 import { MoneyText } from "@/src/components/MoneyText";
 import type { UpcomingItem } from "@/src/core/sync/types";
@@ -22,6 +22,7 @@ const SHOWN_UPCOMING = 12;
 export function ProjectionPanel({ workspaceId }: { workspaceId: string }) {
   const [days, setDays] = useState(30);
   const query = useQuery({ queryKey: qk.projection(workspaceId, days), queryFn: () => api.getProjection(workspaceId, days) });
+  const { money } = useMoneyFormat();
   const data = query.data?.projection;
   if (!data || !data.accounts.length) return null;
   const accountName = (id: string | null) => (id ? data.accounts.find((a) => a.id === id)?.name ?? "Archived account" : "No account");
@@ -38,7 +39,7 @@ export function ProjectionPanel({ workspaceId }: { workspaceId: string }) {
       <StatGroup className="lg:grid-cols-1">
         <StatCell
           label="Available to spend"
-          value={`${formatMinorToMajor(data.availableToSpendMinor)} ${data.baseCurrency}`}
+          value={money(data.availableToSpendMinor, data.baseCurrency)}
           trend={data.availableToSpendMinor >= 0 ? "up" : "down"}
           caption={`by ${data.through}: cash, bank and wallets once known income and bills land, less what you'll owe on cards`}
         />
@@ -70,7 +71,7 @@ export function ProjectionPanel({ workspaceId }: { workspaceId: string }) {
                 </span>
                 {dips ? (
                   <p role="note" className="w-full text-xs text-[var(--balance-negative)]">
-                    Drops to {formatMinorToMajor(account.lowestMinor)} {account.currency} on {account.lowestDate}
+                    Drops to {money(account.lowestMinor, account.currency)} on {account.lowestDate}
                   </p>
                 ) : null}
               </li>

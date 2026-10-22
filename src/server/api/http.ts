@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { ensureLedgerAccount, type BootstrapSessionUser } from "@/src/server/auth/bootstrap";
 import { extractBearerToken, fetchIdentityUserInfo } from "@/src/server/auth/identity-userinfo";
 import { createMongoLedgerProvider } from "@/src/server/providers/mongo-ledger-provider";
+import type { NumberFormat } from "@/src/core/locale-format";
 
 export type LedgerSessionContext = {
   identitySub: string;
@@ -13,6 +14,7 @@ export type LedgerSessionContext = {
   email: string;
   displayName: string;
   baseCurrency: string;
+  numberFormat: NumberFormat;
 };
 
 export type PersonalWorkspaceSummary = {
@@ -21,6 +23,7 @@ export type PersonalWorkspaceSummary = {
   slug: string;
   kind: "personal";
   baseCurrency: string;
+  fiscalYearStartMonth: number;
 };
 
 /**
@@ -37,6 +40,7 @@ export const getLedgerProvider = cache(async () => {
     email: account.user.email,
     displayName: account.user.displayName,
     baseCurrency: account.user.baseCurrency,
+    numberFormat: account.user.numberFormat,
   };
 
   return {

@@ -33,6 +33,8 @@ import { CommandPalette } from "@/src/features/command-palette/CommandPalette";
 import { TransactionComposer } from "@/src/features/transactions/TransactionComposer";
 import { NotificationBell } from "@/src/features/notifications/NotificationBell";
 import { ThemeControls } from "@/src/components/ThemeControls";
+import { NumberFormatProvider } from "@/src/components/NumberFormatProvider";
+import type { NumberFormat } from "@/src/core/locale-format";
 import { useUIStore, useWorkspaceStore } from "@/src/stores/ui-store";
 import type { WorkspaceWithRole } from "@/src/core/sync/types";
 import { can } from "@/src/core/permissions/can";
@@ -40,6 +42,7 @@ import { can } from "@/src/core/permissions/can";
 export type ShellUser = {
   displayName: string;
   email: string;
+  numberFormat: NumberFormat;
 };
 
 type Props = {
@@ -232,7 +235,7 @@ export function AppShell({ user, workspaces, children }: Props) {
           ),
         }}
       >
-        {children}
+        <NumberFormatProvider value={user.numberFormat}>{children}</NumberFormatProvider>
       </UIShell>
       <CommandPalette workspaces={workspaces} />
       {personal ? (

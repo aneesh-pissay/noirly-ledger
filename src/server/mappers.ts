@@ -1,4 +1,5 @@
 import { clearingOf } from "@/src/core/clearing";
+import { defaultFiscalStart } from "@/src/core/locale-format";
 import type {
   ApprovalRequest,
   Budget,
@@ -42,6 +43,7 @@ export function mapWorkspace(doc: WorkspaceDocument): Workspace {
     slug: doc.slug,
     ownerUserId: doc.ownerUserId.toString(),
     baseCurrency: doc.baseCurrency,
+    fiscalYearStartMonth: doc.fiscalYearStartMonth ?? defaultFiscalStart(doc.baseCurrency),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
   };

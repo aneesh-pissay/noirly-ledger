@@ -1,4 +1,5 @@
 import { ReportBuilder } from "@/src/features/reports/ReportBuilder";
+import { listSessionWorkspaces } from "@/src/server/api/http";
 
 export default async function TeamReportsPage({
   params,
@@ -6,5 +7,6 @@ export default async function TeamReportsPage({
   params: Promise<{ workspaceId: string }>;
 }) {
   const { workspaceId } = await params;
-  return <ReportBuilder workspaceId={workspaceId} kind="team" />;
+  const workspace = (await listSessionWorkspaces()).find((w) => w.id === workspaceId);
+  return <ReportBuilder workspaceId={workspaceId} kind="team" fiscalYearStartMonth={workspace?.fiscalYearStartMonth} />;
 }

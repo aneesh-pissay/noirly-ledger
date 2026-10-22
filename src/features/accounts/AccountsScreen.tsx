@@ -6,7 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Input, Label, PageContainer } from "@noirly-dev/ui";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
-import { COMMON_CURRENCIES, formatMinorToMajor } from "@/src/core/money";
+import { COMMON_CURRENCIES } from "@/src/core/money";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { isoDate } from "@/src/core/budgets/period";
 import { ACCOUNT_KINDS, ACCOUNT_KIND_LABEL, isLiability, type AccountKind } from "@/src/core/accounts";
 import type { Account } from "@/src/core/sync/types";
@@ -20,6 +21,7 @@ type Props = { workspaceId: string; baseCurrency: string };
 /** /accounts — where your money is kept or owed, with each one's balance. */
 export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
   const queryClient = useQueryClient();
+  const { amount } = useMoneyFormat();
   const accounts = useQuery({ queryKey: qk.accounts(workspaceId), queryFn: () => api.listAccounts(workspaceId) });
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AccountKind>("bank");
@@ -88,7 +90,7 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
         {isLiability(account.kind) ? <p className="text-[11px] text-[var(--muted-foreground)]">owed</p> : null}
         {account.pendingCount ? (
           <p className="font-mono text-[11px] text-[var(--muted-foreground)]">
-            {formatMinorToMajor(account.clearedBalanceMinor)} cleared · {account.pendingCount} pending
+            {amount(account.clearedBalanceMinor, account.currency)} cleared · {account.pendingCount} pending
           </p>
         ) : null}
         {account.reconciledThrough ? (
