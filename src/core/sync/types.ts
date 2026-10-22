@@ -86,6 +86,10 @@ export type Transaction = {
   clearing: Clearing;
   /** Split across categories; empty when it isn't, and then categoryId applies. */
   splits: SplitLine[];
+  tags: string[];
+  /** Who was paid, or paid you. */
+  merchant: string | null;
+  projectId: string | null;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -265,6 +269,10 @@ export type ListTransactionsQuery = {
   categoryId?: string;
   budgetPoolId?: string;
   accountId?: string;
+  tag?: string;
+  /** A merchant's name, matched however it's spelled. */
+  merchant?: string;
+  projectId?: string;
   from?: string;
   to?: string;
   recurringOnly?: boolean;
@@ -285,6 +293,9 @@ export type CreateTransactionInput = {
   clearing?: Clearing;
   /** Two or more lines that add up to the amount; null removes a split. */
   splits?: SplitLine[] | null;
+  tags?: string[] | null;
+  merchant?: string | null;
+  projectId?: string | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;
@@ -402,6 +413,21 @@ export interface LedgerSyncProvider {
     preset: DateRangePreset,
   ): Promise<DashboardSummary>;
 }
+
+/** Something the workspace spends on over time; totals are in base currency, spending net of refunds. */
+export type Project = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string;
+  archived: boolean;
+  spentMinor: MoneyMinor;
+  incomeMinor: MoneyMinor;
+  transactionCount: number;
+};
+
+export type TagSummary = { tag: string; count: number };
+export type MerchantSummary = { key: string; name: string; count: number; spentMinor: MoneyMinor };
 
 /** What a workspace has and owes across its accounts, in its base currency. */
 export type NetWorth = {

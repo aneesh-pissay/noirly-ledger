@@ -78,6 +78,10 @@ export async function runRecurringEngine(asOf = new Date()): Promise<{ created: 
               categoryId: template.categoryId,
               // Each line's base share follows this occurrence's rate.
               splits: storedSplits(template.splits ?? [], baseAmountMinor),
+              tags: template.tags ?? [],
+              merchant: template.merchant ?? null,
+              merchantKey: template.merchantKey ?? null,
+              projectId: template.projectId ?? null,
               accountId: template.accountId ?? null,
               toAccountId: template.toAccountId ?? null,
               toAmountMinor: template.toAmountMinor ?? null,

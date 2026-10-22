@@ -83,6 +83,11 @@ const transactionSchema = new Schema(
     clearing: { type: String, enum: CLEARING_STATES, default: "cleared" },
     // Split across categories (two or more lines adding up to amountMinor); empty when not split, and then categoryId applies.
     splits: { type: [splitSchema], default: [] },
+    // Free tags (lowercase), who was paid or paid you, and a project; see src/core/labels.ts.
+    tags: { type: [String], default: [] },
+    merchant: { type: String, default: null },
+    merchantKey: { type: String, default: null },
+    projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null, index: true },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },
@@ -113,6 +118,8 @@ const transactionSchema = new Schema(
 
 transactionSchema.index({ workspaceId: 1, date: -1 });
 transactionSchema.index({ "splits.categoryId": 1 });
+transactionSchema.index({ workspaceId: 1, tags: 1 });
+transactionSchema.index({ workspaceId: 1, merchantKey: 1 });
 transactionSchema.index({ budgetPoolId: 1, isPosted: 1 });
 // The recurring engine looks up a rule's occurrences by date.
 transactionSchema.index({ recurringParentId: 1, date: -1 });

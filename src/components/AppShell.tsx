@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, type ReactNode } from "react";
 import {
   BarChart3,
+  Briefcase,
   FolderKanban,
   Goal,
   LayoutDashboard,
@@ -125,6 +126,7 @@ export function AppShell({ user, workspaces, children }: Props) {
         items: [
           { href: "/goals", label: "Goals", icon: Goal },
           { href: "/categories", label: "Categories", icon: Tags },
+          { href: "/projects", label: "Projects", icon: Briefcase },
           { href: "/reports", label: "Reports", icon: BarChart3 },
         ],
       },

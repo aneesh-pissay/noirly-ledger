@@ -1,6 +1,9 @@
 import type {
   Account,
   NetWorth,
+  Project,
+  TagSummary,
+  MerchantSummary,
   Projection,
   ApprovalRequest,
   ApprovalView,
@@ -87,6 +90,9 @@ export const api = {
       cursor?: string;
       categoryId?: string;
       accountId?: string;
+      tag?: string;
+      merchant?: string;
+      projectId?: string;
       from?: string;
       to?: string;
       type?: TransactionType;
@@ -98,6 +104,9 @@ export const api = {
     if (query.cursor) params.set("cursor", query.cursor);
     if (query.categoryId) params.set("categoryId", query.categoryId);
     if (query.accountId) params.set("accountId", query.accountId);
+    if (query.tag) params.set("tag", query.tag);
+    if (query.merchant) params.set("merchant", query.merchant);
+    if (query.projectId) params.set("projectId", query.projectId);
     if (query.from) params.set("from", query.from);
     if (query.to) params.set("to", query.to);
     if (query.type) params.set("type", query.type);
@@ -149,6 +158,24 @@ export const api = {
   },
   updateAccount(accountId: string, body: { name?: string; archived?: boolean; openingMajor?: string; institution?: string | null }) {
     return request<{ account: Account }>(`/api/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  listProjects(workspaceId: string) {
+    return request<{ projects: Project[] }>(`/api/workspaces/${workspaceId}/projects`);
+  },
+  createProject(workspaceId: string, body: { name: string; color?: string }) {
+    return request<{ project: Project }>(`/api/workspaces/${workspaceId}/projects`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateProject(projectId: string, body: { name?: string; color?: string; archived?: boolean }) {
+    return request<{ project: Project }>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteProject(projectId: string) {
+    return request<{ ok: boolean }>(`/api/projects/${projectId}`, { method: "DELETE" });
+  },
+  listTags(workspaceId: string) {
+    return request<{ tags: TagSummary[] }>(`/api/workspaces/${workspaceId}/tags`);
+  },
+  listMerchants(workspaceId: string) {
+    return request<{ merchants: MerchantSummary[] }>(`/api/workspaces/${workspaceId}/merchants`);
   },
   getNetWorth(workspaceId: string, months = 12) {
     return request<{ netWorth: NetWorth }>(`/api/workspaces/${workspaceId}/net-worth?months=${months}`);

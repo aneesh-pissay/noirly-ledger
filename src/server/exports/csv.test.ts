@@ -14,10 +14,15 @@ describe("transactionToCsvRow", () => {
       note: "Lunch, cafe",
       status: "posted",
       createdBy: "Ada",
+      merchant: "Blue Bottle",
+      tags: "work trip",
+      project: "Offsite",
     });
     expect(CSV_HEADER).toContain("currency");
     expect(line).toContain("12.34");
     expect(line).toContain("USD");
     expect(line).toContain('"Lunch, cafe"');
+    expect(CSV_HEADER.endsWith("merchant,tags,project")).toBe(true);
+    expect(line.endsWith("Blue Bottle,work trip,Offsite")).toBe(true);
   });
 });

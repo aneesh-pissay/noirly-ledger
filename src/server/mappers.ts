@@ -81,6 +81,9 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     // Filled in where it's listed; see withRefunded.
     refundedMinor: 0,
     clearing: clearingOf(doc.clearing),
+    tags: doc.tags ?? [],
+    merchant: doc.merchant ?? null,
+    projectId: doc.projectId ? doc.projectId.toString() : null,
     splits: (doc.splits ?? []).map((line) => ({
       categoryId: line.categoryId ? line.categoryId.toString() : null,
       amountMinor: line.amountMinor,

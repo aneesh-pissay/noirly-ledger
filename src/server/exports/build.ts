@@ -6,6 +6,7 @@ import {
   BudgetPool,
   Category,
   LedgerUser,
+  Project,
   Transaction,
 } from "@/src/server/models";
 import {
@@ -68,6 +69,8 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
     }),
   );
   const poolById = new Map(pools.map((p) => [p._id.toString(), p.name]));
+  const projects = await Project.find({ _id: { $in: txns.map((t) => t.projectId).filter((id): id is Types.ObjectId => Boolean(id)) } }).select("name").lean();
+  const projectById = new Map(projects.map((p) => [p._id.toString(), p.name]));
   const userById = new Map(users.map((u) => [u._id.toString(), u.displayName]));
 
   return txns.map((txn) => ({
@@ -83,6 +86,9 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
     note: txn.note ?? "",
     status: txn.isPosted ? "posted" : "pending",
     createdBy: userById.get(txn.createdById.toString()) ?? "",
+    merchant: txn.merchant ?? "",
+    tags: (txn.tags ?? []).join(" "),
+    project: txn.projectId ? projectById.get(txn.projectId.toString()) ?? "" : "",
   }));
 }
 

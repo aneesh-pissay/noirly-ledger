@@ -1,6 +1,9 @@
 export type TxFilters = {
   categoryId?: string;
   accountId?: string;
+  tag?: string;
+  merchant?: string;
+  projectId?: string;
   budgetPoolId?: string;
   from?: string;
   to?: string;
@@ -25,6 +28,10 @@ export const qk = {
   // Under "accounts" so anything that refreshes balances refreshes net worth too.
   netWorth: (workspaceId: string) => ["accounts", workspaceId, "net-worth"] as const,
   projection: (workspaceId: string, days: number) => ["accounts", workspaceId, "projection", days] as const,
+  // Projects, tags and merchants all follow transactions, so they share a prefix to refresh together.
+  projects: (workspaceId: string) => ["labels", workspaceId, "projects"] as const,
+  tags: (workspaceId: string) => ["labels", workspaceId, "tags"] as const,
+  merchants: (workspaceId: string) => ["labels", workspaceId, "merchants"] as const,
   fxRates: (workspaceId: string) => ["fx-rates", workspaceId] as const,
   dashboard: (workspaceId: string, range: string) =>
     ["dashboard", workspaceId, range] as const,

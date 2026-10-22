@@ -36,6 +36,9 @@ export const createTransactionBodySchema = z.object({
   /** Refunds: the expense this takes back. */
   refundOfId: z.string().min(1).nullable().optional(),
   clearing: z.enum(CLEARING_STATES).optional(),
+  tags: z.array(z.string().trim().max(40)).max(20).nullable().optional(),
+  merchant: z.string().trim().max(120).nullable().optional(),
+  projectId: z.string().min(1).nullable().optional(),
   /** Split across categories; the lines must add up to the amount. null removes a split. */
   splits: z
     .array(
@@ -169,6 +172,16 @@ export const createInviteBodySchema = z.object({
 export const updateMemberBodySchema = z.object({
   role: z.enum(["owner", "approver", "member"]),
 });
+
+export const createProjectBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  color: z.string().trim().regex(/^#([0-9a-fA-F]{6})$/).optional(),
+});
+
+export const updateProjectBodySchema = createProjectBodySchema
+  .partial()
+  .extend({ archived: z.boolean().optional() })
+  .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
 
 /** A statement to reconcile an account to: its closing balance and the last day it covers. */
 export const reconcileAccountBodySchema = z.object({

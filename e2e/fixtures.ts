@@ -12,7 +12,19 @@ export type TestUser = {
   /** Signed-in API client, sending the CSRF header the web app sends. */
   api: APIRequestContext;
   id: string;
+  /**
+   * A made-up client address for this person's requests. The API limits each
+   * address to 300 requests a minute, and the whole suite runs from one
+   * machine; giving each test user its own keeps the suite under the limit
+   * without loosening it.
+   */
+  clientIp: string;
 };
+
+function fakeClientIp() {
+  const byte = () => Math.floor(Math.random() * 254) + 1;
+  return `10.${byte()}.${byte()}.${byte()}`;
+}
 
 /**
  * A brand-new person with a minted session (the JWT Auth.js would produce
@@ -21,6 +33,7 @@ export type TestUser = {
  */
 export async function newUser(name: string): Promise<TestUser> {
   const sub = `e2e-${randomUUID()}`;
+  const clientIp = fakeClientIp();
   const token = await encode({
     secret: E2E_AUTH_SECRET,
     salt: SESSION_COOKIE,
@@ -34,12 +47,12 @@ export async function newUser(name: string): Promise<TestUser> {
   });
   const api = await playwrightRequest.newContext({
     baseURL: E2E_BASE_URL,
-    extraHTTPHeaders: { cookie: `${SESSION_COOKIE}=${token}`, "x-noirly-csrf": "1" },
+    extraHTTPHeaders: { cookie: `${SESSION_COOKIE}=${token}`, "x-noirly-csrf": "1", "x-forwarded-for": clientIp },
   });
   const me = await api.get("/api/me");
   expect(me.ok(), await me.text()).toBe(true);
   const { user } = (await me.json()) as { user: { id: string } };
-  return { name, token, api, id: user.id };
+  return { name, token, api, id: user.id, clientIp };
 }
 
 export async function personalWorkspaceId(user: TestUser): Promise<string> {
@@ -73,7 +86,7 @@ export async function newTeam(owner: TestUser, members: TestUser[] = [], role: "
 
 /** A browser context signed in as `user`. */
 export async function browserAs(browser: Browser, user: TestUser): Promise<BrowserContext> {
-  const context = await browser.newContext({ baseURL: E2E_BASE_URL });
+  const context = await browser.newContext({ baseURL: E2E_BASE_URL, extraHTTPHeaders: { "x-forwarded-for": user.clientIp } });
   await context.addCookies([
     { name: SESSION_COOKIE, value: user.token, url: E2E_BASE_URL, httpOnly: true, sameSite: "Lax" },
   ]);

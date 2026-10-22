@@ -13,6 +13,7 @@ import { Input, Label, Textarea } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
 import { useUIStore } from "@/src/stores/ui-store";
 import { categoryTree } from "@/src/core/categories";
+import { parseTagInput } from "@/src/core/labels";
 
 type FormValues = {
   type: "expense" | "income" | "transfer";
@@ -26,6 +27,10 @@ type FormValues = {
   note: string;
   frequency: "" | "daily" | "weekly" | "monthly" | "yearly";
   clearing: "cleared" | "pending";
+  merchant: string;
+  /** Typed as "trip, work". */
+  tags: string;
+  projectId: string;
 };
 
 type Props = {
@@ -54,6 +59,11 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
     enabled: open,
   });
   const openAccounts = (accounts.data?.accounts ?? []).filter((account) => !account.archived);
+  const projects = useQuery({ queryKey: qk.projects(workspaceId), queryFn: () => api.listProjects(workspaceId), enabled: open });
+  const openProjects = (projects.data?.projects ?? []).filter((project) => !project.archived);
+  // Past merchants and tags, offered as suggestions while typing.
+  const merchants = useQuery({ queryKey: qk.merchants(workspaceId), queryFn: () => api.listMerchants(workspaceId), enabled: open });
+  const tags = useQuery({ queryKey: qk.tags(workspaceId), queryFn: () => api.listTags(workspaceId), enabled: open });
 
   const form = useForm<FormValues>({
     defaultValues: {
@@ -68,6 +78,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
       note: "",
       frequency: "",
       clearing: "cleared",
+      merchant: "",
+      tags: "",
+      projectId: "",
     },
   });
 
@@ -93,6 +106,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         receiptUrl: receipt?.url ?? null,
         receiptStorageKey: receipt?.key ?? null,
         clearing: values.clearing,
+        merchant: values.merchant.trim() || null,
+        tags: parseTagInput(values.tags),
+        projectId: values.projectId || null,
         recurrence: values.frequency
           ? { frequency: values.frequency, interval: 1 }
           : null,
@@ -108,6 +124,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         queryClient.invalidateQueries({ queryKey: ["dashboard", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: qk.budgets(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: ["labels", workspaceId] }),
       ]);
       form.reset({
         type: "expense",
@@ -121,6 +138,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         note: "",
         frequency: "",
         clearing: "cleared",
+        merchant: "",
+        tags: "",
+        projectId: "",
       });
       setReceipt(null);
       setLines(null);
@@ -131,7 +151,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
 
   const accountId = useWatch({ control: form.control, name: "accountId" });
   const chosenAccount = openAccounts.find((account) => account.id === accountId);
-  const isTransfer = useWatch({ control: form.control, name: "type" }) === "transfer";
+  const txType = useWatch({ control: form.control, name: "type" });
+  const isTransfer = txType === "transfer";
   const amountMajor = useWatch({ control: form.control, name: "amountMajor" });
   // What's left to give a line, so the split can be balanced before saving.
   const splitLeft = (() => {
@@ -319,6 +340,31 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             </Select>
           </div>
         )}
+        <div className={openProjects.length ? "grid grid-cols-2 gap-3" : undefined}>
+          <div>
+            <Label htmlFor="merchant">{txType === "income" ? "Paid by" : "Merchant"}</Label>
+            <Input id="merchant" list="merchant-options" autoComplete="off" maxLength={80} {...form.register("merchant")} />
+            <datalist id="merchant-options">
+              {(merchants.data?.merchants ?? []).map((merchant) => <option key={merchant.key} value={merchant.name} />)}
+            </datalist>
+          </div>
+          {openProjects.length ? (
+            <div>
+              <Label htmlFor="project">Project</Label>
+              <Select id="project" {...form.register("projectId")}>
+                <option value="">No project</option>
+                {openProjects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+              </Select>
+            </div>
+          ) : null}
+        </div>
+        <div>
+          <Label htmlFor="tags">Tags</Label>
+          <Input id="tags" list="tag-options" autoComplete="off" placeholder="trip, work" {...form.register("tags")} />
+          <datalist id="tag-options">
+            {(tags.data?.tags ?? []).map((tag) => <option key={tag.tag} value={tag.tag} />)}
+          </datalist>
+        </div>
         <div>
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" {...form.register("note")} />

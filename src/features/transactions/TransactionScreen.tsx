@@ -33,20 +33,39 @@ export function TransactionScreen({
     queryKey: qk.categories(workspaceId),
     queryFn: () => api.listCategories(workspaceId),
   });
-  // /transactions?account=… lists one account's transactions (linked from Accounts).
-  const accountFilter = useSearchParams().get("account") ?? undefined;
+  // /transactions?account=…, ?tag=…, ?merchant=… or ?project=… lists just those (linked from Accounts, Projects and the rows here).
+  const search = useSearchParams();
+  const accountFilter = search.get("account") ?? undefined;
+  const tagFilter = search.get("tag") ?? undefined;
+  const merchantFilter = search.get("merchant") ?? undefined;
+  const projectFilter = search.get("project") ?? undefined;
+  const projects = useQuery({ queryKey: qk.projects(workspaceId), queryFn: () => api.listProjects(workspaceId) });
   const accounts = useQuery({
     queryKey: qk.accounts(workspaceId),
     queryFn: () => api.listAccounts(workspaceId),
   });
   const txns = useQuery({
-    queryKey: qk.transactions(workspaceId, { recurring: recurringOnly, accountId: accountFilter }),
+    queryKey: qk.transactions(workspaceId, { recurring: recurringOnly, accountId: accountFilter, tag: tagFilter, merchant: merchantFilter, projectId: projectFilter }),
     queryFn: () =>
-      api.listTransactions(workspaceId, { recurring: recurringOnly, accountId: accountFilter, limit: 200 }),
+      api.listTransactions(workspaceId, {
+        recurring: recurringOnly,
+        accountId: accountFilter,
+        tag: tagFilter,
+        merchant: merchantFilter,
+        projectId: projectFilter,
+        limit: 200,
+      }),
   });
   const accountName = (id: string | null) =>
     id ? accounts.data?.accounts.find((a) => a.id === id)?.name ?? "Account" : "—";
-  const filtered = accountFilter ? accounts.data?.accounts.find((a) => a.id === accountFilter) : undefined;
+  const projectName = (id: string | null) => (id ? projects.data?.projects.find((p) => p.id === id)?.name ?? "Project" : null);
+  const base = recurringOnly ? "/recurring" : "/transactions";
+  const showing = [
+    accountFilter ? accounts.data?.accounts.find((a) => a.id === accountFilter)?.name ?? "one account" : null,
+    tagFilter ? `#${tagFilter}` : null,
+    merchantFilter ?? null,
+    projectFilter ? projectName(projectFilter) : null,
+  ].filter(Boolean);
 
   const [refunding, setRefunding] = useState<Transaction | null>(null);
   const setClearing = useMutation({
@@ -87,10 +106,10 @@ export function TransactionScreen({
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
             Amounts in original currency; base {baseCurrency} is stored on save.
           </p>
-          {accountFilter ? (
+          {showing.length ? (
             <p className="mt-1 text-sm">
-              Showing {filtered?.name ?? "one account"} ·{" "}
-              <Link href={recurringOnly ? "/recurring" : "/transactions"} className="underline">Show all</Link>
+              Showing {showing.join(", ")} ·{" "}
+              <Link href={base} className="underline">Show all</Link>
             </p>
           ) : null}
         </div>
@@ -104,11 +123,11 @@ export function TransactionScreen({
       <RefundDialog workspaceId={workspaceId} expense={refunding} onClose={() => setRefunding(null)} />
 
       <div className="mt-6 overflow-hidden rounded-xl border border-[var(--hairline)]">
-        <div className="grid grid-cols-[7rem_1fr_1fr_1fr_7rem_6rem_8rem_7rem] border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        <div className="grid grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
           <span>Date</span>
           <span>Category</span>
           <span>Account</span>
-          <span>Note</span>
+          <span>Details</span>
           <span>Type</span>
           <span>Status</span>
           <span className="text-right">Amount</span>
@@ -133,7 +152,7 @@ export function TransactionScreen({
                 return (
                   <div
                     key={txn.id}
-                    className="absolute left-0 grid w-full grid-cols-[7rem_1fr_1fr_1fr_7rem_6rem_8rem_7rem] items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
+                    className="absolute left-0 grid w-full grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -147,12 +166,33 @@ export function TransactionScreen({
                         Split <span className="text-[var(--muted-foreground)]">· {txn.splits.map((line) => categoryName(line.categoryId)).join(", ")}</span>
                       </span>
                     ) : (
-                      <span>{categoryName(txn.categoryId)}</span>
+                      <span className="truncate">{categoryName(txn.categoryId)}</span>
                     )}
                     <span className="truncate text-[var(--muted-foreground)]">
                       {txn.toAccountId ? `${accountName(txn.accountId)} → ${accountName(txn.toAccountId)}` : accountName(txn.accountId)}
                     </span>
-                    <span className="truncate text-[var(--muted-foreground)]">{txn.note ?? "—"}</span>
+                    {/* Merchant and note on top; project and tags underneath, so neither crowds the other out. */}
+                    <span className="flex min-w-0 flex-col text-[var(--muted-foreground)]">
+                      <span className="truncate">
+                        {txn.merchant ? (
+                          <Link href={`${base}?merchant=${encodeURIComponent(txn.merchant)}`} className="font-medium text-[var(--foreground)] hover:underline">
+                            {txn.merchant}
+                          </Link>
+                        ) : null}
+                        {txn.merchant && txn.note ? " · " : null}
+                        {txn.note ?? (txn.merchant ? null : "—")}
+                      </span>
+                      {txn.projectId || txn.tags.length ? (
+                        <span className="flex gap-2 truncate text-[11px] leading-4">
+                          {txn.projectId ? (
+                            <Link href={`${base}?project=${txn.projectId}`} className="hover:underline">{projectName(txn.projectId)}</Link>
+                          ) : null}
+                          {txn.tags.map((tag) => (
+                            <Link key={tag} href={`${base}?tag=${encodeURIComponent(tag)}`} className="font-mono hover:underline">#{tag}</Link>
+                          ))}
+                        </span>
+                      ) : null}
+                    </span>
                     <span className="text-[var(--muted-foreground)]">
                       {txn.type === "expense" && txn.refundedMinor
                         ? txn.refundedMinor >= txn.amountMinor ? "Refunded" : "Part refunded"

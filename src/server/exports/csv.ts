@@ -12,6 +12,10 @@ export type CsvTransactionRow = {
   note: string;
   status: string;
   createdBy: string;
+  merchant: string;
+  /** Space-separated. */
+  tags: string;
+  project: string;
 };
 
 export const CSV_HEADER = csvLine([
@@ -25,6 +29,9 @@ export const CSV_HEADER = csvLine([
   "note",
   "status",
   "created_by",
+  "merchant",
+  "tags",
+  "project",
 ]);
 
 export function transactionToCsvRow(row: CsvTransactionRow): string {
@@ -39,5 +46,8 @@ export function transactionToCsvRow(row: CsvTransactionRow): string {
     row.note,
     row.status,
     row.createdBy,
+    row.merchant,
+    row.tags,
+    row.project,
   ]);
 }

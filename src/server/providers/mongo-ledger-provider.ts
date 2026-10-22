@@ -74,6 +74,9 @@ import { spendSign } from "@/src/core/refunds";
 import { clearingOf, reconciledChange } from "@/src/core/clearing";
 import { checkParent, topLevelOf } from "@/src/core/categories";
 import { budgetCategoryIds } from "@/src/server/categories/tree";
+import { labelFields } from "@/src/server/labels";
+import { assertTransactionProject } from "@/src/server/projects";
+import { merchantKey } from "@/src/core/labels";
 import { assertSplits, refundSplits, spentInCategories, storedSplits, type StoredSplit } from "@/src/server/splits";
 
 type ProviderContext = {
@@ -316,6 +319,9 @@ export function createMongoLedgerProvider(
         if (query.categoryId) all.push({ $or: [{ categoryId: oid(query.categoryId) }, { "splits.categoryId": oid(query.categoryId) }] });
         if (query.budgetPoolId) filter.budgetPoolId = oid(query.budgetPoolId);
         // An account's transactions include transfers into it.
+        if (query.tag) filter.tags = query.tag.toLowerCase().replace(/^#+/, "");
+        if (query.merchant) filter.merchantKey = merchantKey(query.merchant);
+        if (query.projectId) filter.projectId = oid(query.projectId);
         if (query.accountId) all.push({ $or: [{ accountId: oid(query.accountId) }, { toAccountId: oid(query.accountId) }] });
         if (all.length) filter.$and = all;
         if (query.type) filter.type = query.type;
@@ -395,6 +401,13 @@ export function createMongoLedgerProvider(
         }
         await assertTransactionAccount(workspace._id, accountId, input.currency, refundOf?.accountId?.toString() ?? null);
         const transfer = await resolveTransfer(workspace._id, input);
+        // A refund keeps its expense's merchant, project and tags unless it names its own.
+        const labels = labelFields({
+          tags: input.tags ?? refundOf?.tags ?? [],
+          merchant: input.merchant !== undefined ? input.merchant : refundOf?.merchant ?? null,
+        });
+        const projectId = input.projectId ?? refundOf?.projectId?.toString() ?? null;
+        await assertTransactionProject(workspace._id, projectId, refundOf?.projectId?.toString() ?? null);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
         const baseAmountMinor = await toBaseAmount({
@@ -423,6 +436,8 @@ export function createMongoLedgerProvider(
           refundOfId: refundOf?._id ?? null,
           clearing: input.clearing ?? "cleared",
           splits: storedSplits(lines, baseAmountMinor),
+          ...labels,
+          projectId: optionalOid(projectId),
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -529,6 +544,11 @@ export function createMongoLedgerProvider(
         }
         if (patch.date) doc.date = new Date(`${patch.date}T12:00:00.000Z`);
         if (patch.note !== undefined) doc.note = patch.note;
+        doc.set(labelFields({ tags: patch.tags, merchant: patch.merchant }));
+        if (patch.projectId !== undefined) {
+          await assertTransactionProject(workspace._id, patch.projectId, doc.projectId?.toString() ?? null);
+          doc.projectId = optionalOid(patch.projectId);
+        }
         if (patch.receiptStorageKey !== undefined) {
           const receipt = receiptFields(workspace._id, patch.receiptStorageKey);
           doc.receiptStorageKey = receipt.receiptStorageKey;
