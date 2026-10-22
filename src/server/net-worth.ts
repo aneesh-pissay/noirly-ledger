@@ -12,7 +12,7 @@ import type { NetWorth } from "@/src/core/sync/types";
 const DAY = { $dateToString: { format: "%Y-%m-%d", date: "$date" } };
 
 /** Every account's posted, live money in and out, summed per day. */
-async function entriesByAccount(accountIds: Types.ObjectId[]) {
+export async function entriesByAccount(accountIds: Types.ObjectId[]) {
   const live = { deletedAt: null, isPosted: true };
   const [out, incoming] = await Promise.all([
     TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType; date: string }; amountMinor: number }>([
@@ -38,6 +38,25 @@ async function entriesByAccount(accountIds: Types.ObjectId[]) {
 }
 
 /**
+ * Converts amounts to the base currency at the rate in force on a day (the
+ * newest on or before it, as in toBaseAmount), or null when there's none yet.
+ * Loads the workspace's rates once.
+ */
+export async function baseConverter(workspaceId: Types.ObjectId, base: string) {
+  const rates = await FxRate.find({ workspaceId }).sort({ effectiveFrom: 1 }).select("currency rateToBaseScaled effectiveFrom").lean();
+  return (minor: number, currency: string, day: string) => {
+    if (currency === base) return minor;
+    let found: number | null = null;
+    for (const rate of rates) {
+      if (rate.currency !== currency) continue;
+      if (rate.effectiveFrom.toISOString().slice(0, 10) > day) break;
+      found = rate.rateToBaseScaled;
+    }
+    return found == null ? null : convertToBaseMinor(minor, found, FX_RATE_SCALE);
+  };
+}
+
+/**
  * What the workspace has and owes across its accounts, in the base currency,
  * now and at the end of each of the last `months` months. Each balance uses
  * the FX rate in force on its day; an account is left out of the days before
@@ -50,25 +69,10 @@ export function getNetWorth(userId: string, workspaceId: string, months = 12): P
     if (!workspace) throw new ApiError(404, "not_found", "Workspace not found");
     const base = workspace.baseCurrency;
     const accounts = await AccountModel.find({ workspaceId: workspace._id }).sort({ createdAt: 1 }).lean();
-    const rates = await FxRate.find({ workspaceId: workspace._id }).sort({ effectiveFrom: 1 }).select("currency rateToBaseScaled effectiveFrom").lean();
+    const toBase = await baseConverter(workspace._id, base);
     const entries = await entriesByAccount(accounts.map((a) => a._id));
 
     const days = historyDays(new Date().toISOString().slice(0, 10), months);
-    // The newest rate on or before the day, as in toBaseAmount.
-    const rateOn = (currency: string, day: string) => {
-      let found: number | null = null;
-      for (const rate of rates) {
-        if (rate.currency !== currency) continue;
-        if (rate.effectiveFrom.toISOString().slice(0, 10) > day) break;
-        found = rate.rateToBaseScaled;
-      }
-      return found;
-    };
-    const toBase = (minor: number, currency: string, day: string) => {
-      if (currency === base) return minor;
-      const rate = rateOn(currency, day);
-      return rate == null ? null : convertToBaseMinor(minor, rate, FX_RATE_SCALE);
-    };
 
     const missing = new Set<string>();
     const rows = accounts.map((account) => {

@@ -24,6 +24,7 @@ export const qk = {
   accounts: (workspaceId: string) => ["accounts", workspaceId] as const,
   // Under "accounts" so anything that refreshes balances refreshes net worth too.
   netWorth: (workspaceId: string) => ["accounts", workspaceId, "net-worth"] as const,
+  projection: (workspaceId: string, days: number) => ["accounts", workspaceId, "projection", days] as const,
   fxRates: (workspaceId: string) => ["fx-rates", workspaceId] as const,
   dashboard: (workspaceId: string, range: string) =>
     ["dashboard", workspaceId, range] as const,

@@ -96,7 +96,7 @@ export type Transaction = {
   deletedAt: string | null;
 };
 
-/** Where money is kept or owed. balanceMinor is what's in it, or for cards and loans what's owed, in its currency. */
+/** Where money is kept or owed. balanceMinor is what's in it today, or for cards and loans what's owed, in its currency. */
 export type Account = {
   id: string;
   workspaceId: string;
@@ -111,6 +111,8 @@ export type Account = {
   /** The balance leaving out pending transactions: what the bank should show. */
   clearedBalanceMinor: MoneyMinor;
   pendingCount: number;
+  /** Dated after today, so not in the balance yet. */
+  scheduledCount: number;
   transactionCount: number;
   reconciledThrough: string | null;
   reconciledBalanceMinor: MoneyMinor | null;
@@ -403,5 +405,41 @@ export type NetWorth = {
   accounts: Array<{ id: string; name: string; kind: AccountKind; currency: string; archived: boolean; balanceMinor: MoneyMinor; baseBalanceMinor: MoneyMinor | null }>;
   /** Month ends, then today. */
   history: Array<{ date: string; assetsMinor: MoneyMinor; liabilitiesMinor: MoneyMinor; netMinor: MoneyMinor }>;
+  missingRates: string[];
+};
+
+/** Something known to be coming: a future-dated transaction or a recurring rule's next occurrence. */
+export type UpcomingItem = {
+  date: string;
+  /** The note, or the category's name. */
+  label: string;
+  type: TransactionType;
+  amountMinor: MoneyMinor;
+  currency: string;
+  accountId: string | null;
+  toAccountId: string | null;
+  toAmountMinor: MoneyMinor | null;
+  categoryId: string | null;
+  recurring: boolean;
+};
+
+/** Where open accounts are heading over a window, and what's free to spend by its end. */
+export type Projection = {
+  baseCurrency: string;
+  from: string;
+  through: string;
+  availableToSpendMinor: MoneyMinor;
+  accounts: Array<{
+    id: string;
+    name: string;
+    kind: AccountKind;
+    currency: string;
+    todayMinor: MoneyMinor;
+    projectedMinor: MoneyMinor;
+    /** The least in it (or most owed) on the way, and the day; null date when it never dips. */
+    lowestMinor: MoneyMinor;
+    lowestDate: string | null;
+  }>;
+  upcoming: UpcomingItem[];
   missingRates: string[];
 };

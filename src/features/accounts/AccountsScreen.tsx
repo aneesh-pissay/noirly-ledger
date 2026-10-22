@@ -13,6 +13,7 @@ import type { Account } from "@/src/core/sync/types";
 import { MoneyText } from "@/src/components/MoneyText";
 import { Select } from "@/src/components/Select";
 import { NetWorthPanel } from "@/src/features/accounts/NetWorthPanel";
+import { ProjectionPanel } from "@/src/features/accounts/ProjectionPanel";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -78,6 +79,7 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
           <Link href={`/transactions?account=${account.id}`} className="underline-offset-2 hover:underline">
             {account.transactionCount} transaction{account.transactionCount === 1 ? "" : "s"}
           </Link>
+          {account.scheduledCount ? ` · ${account.scheduledCount} scheduled` : ""}
         </p>
       </div>
       <div className="text-right">
@@ -143,6 +145,7 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
         Pick an account when you add a transaction and its balance follows. Each account keeps its own currency.
       </p>
       <NetWorthPanel workspaceId={workspaceId} />
+      <ProjectionPanel workspaceId={workspaceId} />
 
       <form
         className="mt-6 grid gap-3 surface grain rounded-[var(--r-lg)] p-4 sm:grid-cols-2"

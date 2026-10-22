@@ -31,34 +31,40 @@ function day(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-type Totals = { entries: Array<BalanceEntry & { pending: boolean }>; count: number; pendingCount: number };
+type Totals = { entries: Array<BalanceEntry & { pending: boolean; future: boolean }>; count: number; pendingCount: number; scheduledCount: number };
 
 const pendingExpr = { $eq: ["$clearing", "pending"] };
 
-/** Posted, live transactions per account, summed by type and whether they're pending; a transfer counts out of one account and into the other. */
+/**
+ * Posted, live transactions per account, summed by type, whether they're
+ * pending, and whether they're dated after today (scheduled, so not in the
+ * balance yet). A transfer counts out of one account and into the other.
+ */
 async function totals(accountIds: Types.ObjectId[]) {
   const byAccount = new Map<string, Totals>();
   if (!accountIds.length) return byAccount;
   const live = { deletedAt: null, isPosted: true };
+  const futureExpr = { $gt: ["$date", new Date(`${day(new Date())}T23:59:59.999Z`)] };
   const [out, incoming] = await Promise.all([
-    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType; pending: boolean }; amountMinor: number; count: number }>([
+    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType; pending: boolean; future: boolean }; amountMinor: number; count: number }>([
       { $match: { accountId: { $in: accountIds }, ...live } },
-      { $group: { _id: { accountId: "$accountId", type: "$type", pending: pendingExpr }, amountMinor: { $sum: "$amountMinor" }, count: { $sum: 1 } } },
+      { $group: { _id: { accountId: "$accountId", type: "$type", pending: pendingExpr, future: futureExpr }, amountMinor: { $sum: "$amountMinor" }, count: { $sum: 1 } } },
     ]),
-    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; pending: boolean }; amountMinor: number; count: number }>([
+    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; pending: boolean; future: boolean }; amountMinor: number; count: number }>([
       { $match: { toAccountId: { $in: accountIds }, type: "transfer", ...live } },
-      { $group: { _id: { accountId: "$toAccountId", pending: pendingExpr }, amountMinor: { $sum: "$toAmountMinor" }, count: { $sum: 1 } } },
+      { $group: { _id: { accountId: "$toAccountId", pending: pendingExpr, future: futureExpr }, amountMinor: { $sum: "$toAmountMinor" }, count: { $sum: 1 } } },
     ]),
   ]);
-  const add = (id: Types.ObjectId, type: BalanceEntry["type"], pending: boolean, amountMinor: number, count: number) => {
-    const entry = byAccount.get(String(id)) ?? { entries: [], count: 0, pendingCount: 0 };
-    entry.entries.push({ type, amountMinor, pending });
+  const add = (id: Types.ObjectId, type: BalanceEntry["type"], key: { pending: boolean; future: boolean }, amountMinor: number, count: number) => {
+    const entry = byAccount.get(String(id)) ?? { entries: [], count: 0, pendingCount: 0, scheduledCount: 0 };
+    entry.entries.push({ type, amountMinor, pending: key.pending, future: key.future });
     entry.count += count;
-    if (pending) entry.pendingCount += count;
+    if (key.future) entry.scheduledCount += count;
+    else if (key.pending) entry.pendingCount += count;
     byAccount.set(String(id), entry);
   };
-  for (const row of out) add(row._id.accountId, row._id.type === "transfer" ? "transfer_out" : row._id.type, row._id.pending, row.amountMinor, row.count);
-  for (const row of incoming) add(row._id.accountId, "transfer_in", row._id.pending, row.amountMinor, row.count);
+  for (const row of out) add(row._id.accountId, row._id.type === "transfer" ? "transfer_out" : row._id.type, row._id, row.amountMinor, row.count);
+  for (const row of incoming) add(row._id.accountId, "transfer_in", row._id, row.amountMinor, row.count);
   return byAccount;
 }
 
@@ -69,6 +75,7 @@ function usedBy(accountId: Types.ObjectId) {
 
 function map(doc: AccountDocument, total?: Totals): Account {
   const kind = doc.kind as AccountKind;
+  const current = (total?.entries ?? []).filter((e) => !e.future);
   return {
     id: String(doc._id),
     workspaceId: String(doc.workspaceId),
@@ -79,9 +86,11 @@ function map(doc: AccountDocument, total?: Totals): Account {
     openingDate: day(doc.openingDate),
     institution: doc.institution ?? null,
     archived: Boolean(doc.archivedAt),
-    balanceMinor: accountBalance(kind, doc.openingBalanceMinor, total?.entries ?? []),
-    clearedBalanceMinor: accountBalance(kind, doc.openingBalanceMinor, (total?.entries ?? []).filter((e) => !e.pending)),
+    // As of today: future-dated transactions show up in projections instead.
+    balanceMinor: accountBalance(kind, doc.openingBalanceMinor, current),
+    clearedBalanceMinor: accountBalance(kind, doc.openingBalanceMinor, current.filter((e) => !e.pending)),
     pendingCount: total?.pendingCount ?? 0,
+    scheduledCount: total?.scheduledCount ?? 0,
     transactionCount: total?.count ?? 0,
     reconciledThrough: doc.reconciledThrough ? day(doc.reconciledThrough) : null,
     reconciledBalanceMinor: doc.reconciledBalanceMinor ?? null,
