@@ -45,7 +45,7 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
   const txns = await Transaction.find(filter).sort({ date: 1 }).limit(10_000);
   const categories = await Category.find({
     _id: {
-      $in: txns.map((t) => t.categoryId).filter((id): id is Types.ObjectId => Boolean(id)),
+      $in: txns.flatMap((t) => [t.categoryId, ...(t.splits ?? []).map((s) => s.categoryId)]).filter((id): id is Types.ObjectId => Boolean(id)),
     },
   });
   const pools = await BudgetPool.find({
@@ -76,7 +76,9 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
     amountMinor: txn.amountMinor,
     currency: txn.currency,
     baseAmountMinor: txn.baseAmountMinor,
-    category: txn.categoryId ? catById.get(txn.categoryId.toString()) ?? "" : "",
+    category: txn.splits?.length
+      ? `Split: ${txn.splits.map((s) => (s.categoryId ? catById.get(s.categoryId.toString()) ?? "" : "Uncategorized")).join(", ")}`
+      : txn.categoryId ? catById.get(txn.categoryId.toString()) ?? "" : "",
     pool: txn.budgetPoolId ? poolById.get(txn.budgetPoolId.toString()) ?? "" : "",
     note: txn.note ?? "",
     status: txn.isPosted ? "posted" : "pending",

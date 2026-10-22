@@ -34,6 +34,7 @@ export async function PATCH(
       accountId: body.accountId,
       toAccountId: body.toAccountId,
       clearing: body.clearing,
+      splits: body.splits === undefined ? undefined : body.splits === null ? null : body.splits.map((line) => ({ categoryId: line.categoryId, amountMinor: parseMajorToMinor(line.amountMajor), note: line.note ?? null })),
       toAmountMinor: body.toAmountMajor === undefined ? undefined : body.toAmountMajor === null ? null : parseMajorToMinor(body.toAmountMajor),
       date: body.date,
       note: body.note,

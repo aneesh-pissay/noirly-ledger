@@ -81,6 +81,11 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     // Filled in where it's listed; see withRefunded.
     refundedMinor: 0,
     clearing: clearingOf(doc.clearing),
+    splits: (doc.splits ?? []).map((line) => ({
+      categoryId: line.categoryId ? line.categoryId.toString() : null,
+      amountMinor: line.amountMinor,
+      note: line.note ?? null,
+    })),
     date: isoDay(doc.date)!,
     note: doc.note ?? null,
     // Built from the key, not the stored URL: older rows hold public R2 links.

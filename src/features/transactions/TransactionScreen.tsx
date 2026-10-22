@@ -142,7 +142,13 @@ export function TransactionScreen({
                     <span className="font-mono tabular-nums text-[var(--muted-foreground)]">
                       {txn.date}
                     </span>
-                    <span>{categoryName(txn.categoryId)}</span>
+                    {txn.splits.length ? (
+                      <span className="truncate" title={txn.splits.map((line) => categoryName(line.categoryId)).join(", ")}>
+                        Split <span className="text-[var(--muted-foreground)]">· {txn.splits.map((line) => categoryName(line.categoryId)).join(", ")}</span>
+                      </span>
+                    ) : (
+                      <span>{categoryName(txn.categoryId)}</span>
+                    )}
                     <span className="truncate text-[var(--muted-foreground)]">
                       {txn.toAccountId ? `${accountName(txn.accountId)} → ${accountName(txn.toAccountId)}` : accountName(txn.accountId)}
                     </span>

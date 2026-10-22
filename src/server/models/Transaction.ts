@@ -22,6 +22,17 @@ const recurrenceSchema = new Schema(
   { _id: false },
 );
 
+// One line of a split: its category and share, in the transaction's currency and in base.
+const splitSchema = new Schema(
+  {
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category", default: null },
+    amountMinor: { type: Number, required: true },
+    baseAmountMinor: { type: Number, required: true },
+    note: { type: String, default: null },
+  },
+  { _id: false },
+);
+
 const transactionSchema = new Schema(
   {
     workspaceId: {
@@ -70,6 +81,8 @@ const transactionSchema = new Schema(
     },
     // Pending, cleared or reconciled against the bank; missing on older rows, which count as cleared.
     clearing: { type: String, enum: CLEARING_STATES, default: "cleared" },
+    // Split across categories (two or more lines adding up to amountMinor); empty when not split, and then categoryId applies.
+    splits: { type: [splitSchema], default: [] },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },
@@ -99,6 +112,7 @@ const transactionSchema = new Schema(
 );
 
 transactionSchema.index({ workspaceId: 1, date: -1 });
+transactionSchema.index({ "splits.categoryId": 1 });
 transactionSchema.index({ budgetPoolId: 1, isPosted: 1 });
 // The recurring engine looks up a rule's occurrences by date.
 transactionSchema.index({ recurringParentId: 1, date: -1 });

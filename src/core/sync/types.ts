@@ -9,6 +9,7 @@ import type {
 import type { MoneyMinor } from "@/src/core/money";
 import type { AccountKind } from "@/src/core/accounts";
 import type { Clearing } from "@/src/core/clearing";
+import type { SplitLine } from "@/src/core/splits";
 
 export type {
   ApprovalStatus,
@@ -83,6 +84,8 @@ export type Transaction = {
   refundedMinor: MoneyMinor;
   /** Against the bank: pending, cleared, or reconciled to a statement. */
   clearing: Clearing;
+  /** Split across categories; empty when it isn't, and then categoryId applies. */
+  splits: SplitLine[];
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -280,6 +283,8 @@ export type CreateTransactionInput = {
   refundOfId?: string | null;
   /** New transactions are pending or cleared; only reconciling an account makes them reconciled. */
   clearing?: Clearing;
+  /** Two or more lines that add up to the amount; null removes a split. */
+  splits?: SplitLine[] | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;

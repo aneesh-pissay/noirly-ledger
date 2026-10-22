@@ -3,12 +3,6 @@ import { ApiError } from "@/src/server/api/http";
 import { Transaction as TransactionModel } from "@/src/server/models";
 import { checkRefund } from "@/src/core/refunds";
 
-/** Spending types, and a $group sum of them in base currency with refunds taking away. */
-export const SPEND_TYPES = ["expense", "refund"];
-export const spentSum = {
-  $sum: { $cond: [{ $eq: ["$type", "refund"] }, { $multiply: ["$baseAmountMinor", -1] }, "$baseAmountMinor"] },
-};
-
 /** How much of each expense live refunds have taken back, in the expense's currency. */
 export async function refundedByExpense(expenseIds: Types.ObjectId[], excludeId?: Types.ObjectId) {
   const refunded = new Map<string, number>();

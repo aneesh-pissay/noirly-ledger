@@ -5,11 +5,10 @@ import { withDb } from "@/src/server/db/mongodb";
 import {
   Budget,
   Category,
-  Transaction,
   WorkspaceMember,
 } from "@/src/server/models";
 import { notifyUsers } from "@/src/server/notifications/notify";
-import { SPEND_TYPES, spentSum } from "@/src/server/refunds";
+import { spentInCategories } from "@/src/server/splits";
 import { budgetCategoryIds } from "@/src/server/categories/tree";
 
 export async function maybeNotifyBudgetThreshold(input: {
@@ -41,20 +40,15 @@ export async function maybeNotifyBudgetThreshold(input: {
         start: budget.periodStart ? isoDate(budget.periodStart) : null,
         end: budget.periodEnd ? isoDate(budget.periodEnd) : null,
       });
-      const spent = await Transaction.aggregate<{ total: number }>([
+      const nextSpent = await spentInCategories(
         {
-          $match: {
-            workspaceId: new Types.ObjectId(input.workspaceId),
-            categoryId: { $in: await budgetCategoryIds(budget.categoryId) },
-            type: { $in: SPEND_TYPES },
-            isPosted: true,
-            deletedAt: null,
-            date: { $gte: window.from, $lte: window.to },
-          },
+          workspaceId: new Types.ObjectId(input.workspaceId),
+          isPosted: true,
+          deletedAt: null,
+          date: { $gte: window.from, $lte: window.to },
         },
-        { $group: { _id: null, total: spentSum } },
-      ]);
-      const nextSpent = spent[0]?.total ?? 0;
+        await budgetCategoryIds(budget.categoryId),
+      );
       const previous = nextSpent - input.addedExpenseMinor;
       if (
         !crossedThreshold({

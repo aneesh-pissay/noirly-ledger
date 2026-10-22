@@ -36,6 +36,18 @@ export const createTransactionBodySchema = z.object({
   /** Refunds: the expense this takes back. */
   refundOfId: z.string().min(1).nullable().optional(),
   clearing: z.enum(CLEARING_STATES).optional(),
+  /** Split across categories; the lines must add up to the amount. null removes a split. */
+  splits: z
+    .array(
+      z.object({
+        categoryId: z.string().min(1).nullable(),
+        amountMajor: amountMajorSchema,
+        note: z.string().trim().max(200).nullable().optional(),
+      }),
+    )
+    .max(20)
+    .nullable()
+    .optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().max(2000).nullable().optional(),
   /** Accepted for older clients but ignored: the server builds it from the key. */

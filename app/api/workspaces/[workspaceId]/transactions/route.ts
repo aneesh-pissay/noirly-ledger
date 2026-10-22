@@ -50,6 +50,7 @@ export async function POST(
       toAccountId: body.toAccountId ?? null,
       refundOfId: body.refundOfId ?? null,
       clearing: body.clearing,
+      splits: body.splits ? body.splits.map((line) => ({ categoryId: line.categoryId, amountMinor: parseMajorToMinor(line.amountMajor), note: line.note ?? null })) : null,
       toAmountMinor: body.toAmountMajor ? parseMajorToMinor(body.toAmountMajor) : null,
       date: body.date,
       note: body.note ?? null,

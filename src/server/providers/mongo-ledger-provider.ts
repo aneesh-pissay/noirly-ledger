@@ -69,11 +69,12 @@ import { publishMany } from "@/src/server/realtime/publish";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
 import { assertTransactionAccount, resolveTransfer } from "@/src/server/accounts";
-import { expenseToRefund, refundedByExpense, SPEND_TYPES, spentSum } from "@/src/server/refunds";
+import { expenseToRefund, refundedByExpense } from "@/src/server/refunds";
 import { spendSign } from "@/src/core/refunds";
 import { clearingOf, reconciledChange } from "@/src/core/clearing";
 import { checkParent, topLevelOf } from "@/src/core/categories";
 import { budgetCategoryIds } from "@/src/server/categories/tree";
+import { assertSplits, refundSplits, spentInCategories, storedSplits, type StoredSplit } from "@/src/server/splits";
 
 type ProviderContext = {
   userId: string;
@@ -310,10 +311,13 @@ export function createMongoLedgerProvider(
           workspaceId: oid(query.workspaceId),
           deletedAt: null,
         };
-        if (query.categoryId) filter.categoryId = oid(query.categoryId);
+        const all: object[] = [];
+        // A category's transactions include split ones with a line in it.
+        if (query.categoryId) all.push({ $or: [{ categoryId: oid(query.categoryId) }, { "splits.categoryId": oid(query.categoryId) }] });
         if (query.budgetPoolId) filter.budgetPoolId = oid(query.budgetPoolId);
         // An account's transactions include transfers into it.
-        if (query.accountId) filter.$or = [{ accountId: oid(query.accountId) }, { toAccountId: oid(query.accountId) }];
+        if (query.accountId) all.push({ $or: [{ accountId: oid(query.accountId) }, { toAccountId: oid(query.accountId) }] });
+        if (all.length) filter.$and = all;
         if (query.type) filter.type = query.type;
         if (query.recurringOnly) {
           filter.isRecurring = true;
@@ -378,6 +382,17 @@ export function createMongoLedgerProvider(
         const categoryId = refundOf ? refundOf.categoryId?.toString() ?? null : input.categoryId;
         const accountId = refundOf && !input.accountId ? refundOf.accountId?.toString() ?? null : input.accountId;
         await assertCategory(workspace._id, categoryId);
+        // A split has no category of its own; a refund of one splits the same way.
+        let lines: Array<{ categoryId: Types.ObjectId | null; amountMinor: number; note?: string | null }> = [];
+        if (refundOf?.splits?.length) {
+          lines = refundSplits(refundOf.splits as StoredSplit[], input.amountMinor);
+        } else if (input.splits?.length) {
+          if (refundOf) throw new ApiError(400, "invalid_request", "A refund splits like its expense");
+          assertSplits(input.type, input.amountMinor, input.splits);
+          if (categoryId) throw new ApiError(400, "invalid_request", "A split transaction takes its categories from its lines");
+          for (const line of input.splits) await assertCategory(workspace._id, line.categoryId);
+          lines = input.splits.map((line) => ({ categoryId: optionalOid(line.categoryId), amountMinor: line.amountMinor, note: line.note ?? null }));
+        }
         await assertTransactionAccount(workspace._id, accountId, input.currency, refundOf?.accountId?.toString() ?? null);
         const transfer = await resolveTransfer(workspace._id, input);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
@@ -407,6 +422,7 @@ export function createMongoLedgerProvider(
           ...transfer,
           refundOfId: refundOf?._id ?? null,
           clearing: input.clearing ?? "cleared",
+          splits: storedSplits(lines, baseAmountMinor),
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -416,11 +432,14 @@ export function createMongoLedgerProvider(
           isPosted: true,
         });
         if (doc.type === "expense") {
-          await maybeNotifyBudgetThreshold({
-            workspaceId: workspace._id.toString(),
-            categoryId: input.categoryId ?? null,
-            addedExpenseMinor: baseAmountMinor,
-          });
+          const notifyLines = doc.splits.length ? doc.splits : [{ categoryId: doc.categoryId, baseAmountMinor }];
+          for (const line of notifyLines) {
+            await maybeNotifyBudgetThreshold({
+              workspaceId: workspace._id.toString(),
+              categoryId: line.categoryId?.toString() ?? null,
+              addedExpenseMinor: line.baseAmountMinor,
+            });
+          }
         }
         return mapTransaction(doc);
       });
@@ -477,8 +496,12 @@ export function createMongoLedgerProvider(
             throw new ApiError(400, "invalid_request", "The expense can't be less than what's been refunded");
           }
         }
+        let refundOf: Awaited<ReturnType<typeof expenseToRefund>> | null = null;
         if (doc.type === "refund" && (patch.amountMinor != null || patch.currency)) {
-          await expenseToRefund(workspace._id, { refundOfId: doc.refundOfId?.toString(), amountMinor: patch.amountMinor ?? doc.amountMinor, currency: patch.currency ?? doc.currency }, doc._id);
+          refundOf = await expenseToRefund(workspace._id, { refundOfId: doc.refundOfId?.toString(), amountMinor: patch.amountMinor ?? doc.amountMinor, currency: patch.currency ?? doc.currency }, doc._id);
+        }
+        if (doc.type === "refund" && patch.splits !== undefined) {
+          throw new ApiError(400, "invalid_request", "A refund splits like its expense");
         }
         if (patch.categoryId !== undefined) await assertCategory(workspace._id, patch.categoryId);
         if (patch.type) doc.type = patch.type;
@@ -530,6 +553,27 @@ export function createMongoLedgerProvider(
           baseCurrency: workspace.baseCurrency,
           asOf: doc.date,
         });
+        // The split, as patched or as it was, must still add up; each line's base share follows the new base amount.
+        let lines: Array<{ categoryId: Types.ObjectId | null; amountMinor: number; note?: string | null }> = doc.splits.map((line) => ({
+          categoryId: line.categoryId ?? null,
+          amountMinor: line.amountMinor,
+          note: line.note ?? null,
+        }));
+        if (refundOf?.splits?.length) {
+          lines = refundSplits(refundOf.splits as StoredSplit[], doc.amountMinor);
+        } else if (patch.splits !== undefined) {
+          lines = [];
+          if (patch.splits?.length) {
+            for (const line of patch.splits) await assertCategory(workspace._id, line.categoryId);
+            lines = patch.splits.map((line) => ({ categoryId: optionalOid(line.categoryId), amountMinor: line.amountMinor, note: line.note ?? null }));
+          }
+        }
+        if (lines.length && doc.type !== "refund") {
+          if (patch.categoryId) throw new ApiError(400, "invalid_request", "Remove the split to give it one category");
+          assertSplits(doc.type, doc.amountMinor, lines.map((line) => ({ categoryId: line.categoryId ? String(line.categoryId) : null, amountMinor: line.amountMinor })));
+          doc.categoryId = null;
+        }
+        doc.set("splits", storedSplits(lines, doc.baseAmountMinor));
         await doc.save();
         return (await withRefunded([mapTransaction(doc)]))[0]!;
       });
@@ -1097,18 +1141,22 @@ export function createMongoLedgerProvider(
             const spent = spendSign(txn.type) * txn.baseAmountMinor;
             expenseMinor += spent;
             bucket.expenseMinor += spent;
-            // Subcategories roll up into their top-level category here.
-            const topId = txn.categoryId ? topLevelOf(txn.categoryId.toString(), categoryNodes) : null;
-            const key = topId ?? "uncategorized";
-            const category = topId ? categoryById.get(topId) : null;
-            const current = byCategoryMap.get(key) ?? {
-              categoryId: topId,
-              name: category?.name ?? "Uncategorized",
-              color: category?.color ?? "#737373",
-              amountMinor: 0,
-            };
-            current.amountMinor += spent;
-            byCategoryMap.set(key, current);
+            // A split counts each line in its own category.
+            const lines = txn.splits?.length ? txn.splits : [{ categoryId: txn.categoryId, baseAmountMinor: txn.baseAmountMinor }];
+            for (const line of lines) {
+              // Subcategories roll up into their top-level category here.
+              const topId = line.categoryId ? topLevelOf(line.categoryId.toString(), categoryNodes) : null;
+              const key = topId ?? "uncategorized";
+              const category = topId ? categoryById.get(topId) : null;
+              const current = byCategoryMap.get(key) ?? {
+                categoryId: topId,
+                name: category?.name ?? "Uncategorized",
+                color: category?.color ?? "#737373",
+                amountMinor: 0,
+              };
+              current.amountMinor += spendSign(txn.type) * line.baseAmountMinor;
+              byCategoryMap.set(key, current);
+            }
           }
           overTimeMap.set(day, bucket);
         }
@@ -1119,20 +1167,10 @@ export function createMongoLedgerProvider(
               start: budget.periodStart ? isoDate(budget.periodStart) : null,
               end: budget.periodEnd ? isoDate(budget.periodEnd) : null,
             });
-            const spent = await TransactionModel.aggregate<{ total: number }>([
-              {
-                $match: {
-                  workspaceId: workspace._id,
-                  categoryId: { $in: await budgetCategoryIds(budget.categoryId) },
-                  type: { $in: SPEND_TYPES },
-                  isPosted: true,
-                  deletedAt: null,
-                  date: { $gte: window.from, $lte: window.to },
-                },
-              },
-              { $group: { _id: null, total: spentSum } },
-            ]);
-            const spentMinor = spent[0]?.total ?? 0;
+            const spentMinor = await spentInCategories(
+              { workspaceId: workspace._id, isPosted: true, deletedAt: null, date: { $gte: window.from, $lte: window.to } },
+              await budgetCategoryIds(budget.categoryId),
+            );
             return {
               budget: mapBudget(budget),
               spentMinor,

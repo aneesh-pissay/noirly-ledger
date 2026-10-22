@@ -49,7 +49,7 @@ async function upcomingRecurring(workspaceId: Types.ObjectId, through: string): 
     );
     return dates.map((date) => ({
       date: date.toISOString().slice(0, 10),
-      label: template.note ?? "",
+      label: template.note ?? (template.splits?.length ? "Split" : ""),
       type: template.type,
       amountMinor: template.amountMinor,
       currency: template.currency,
@@ -72,7 +72,7 @@ async function scheduled(workspaceId: Types.ObjectId, today: string, through: st
   }).lean();
   return docs.map((doc) => ({
     date: doc.date.toISOString().slice(0, 10),
-    label: doc.note ?? "",
+    label: doc.note ?? (doc.splits?.length ? "Split" : ""),
     type: doc.type,
     amountMinor: doc.amountMinor,
     currency: doc.currency,

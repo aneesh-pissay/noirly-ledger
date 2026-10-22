@@ -6,7 +6,7 @@ import { useState } from "react";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { createTransactionBodySchema } from "@/src/core/schemas/ledger";
-import { COMMON_CURRENCIES } from "@/src/core/money";
+import { COMMON_CURRENCIES, formatMinorToMajor, parseMajorToMinor } from "@/src/core/money";
 import { isoDate } from "@/src/core/budgets/period";
 import { Button, Dialog } from "@noirly-dev/ui";
 import { Input, Label, Textarea } from "@noirly-dev/ui";
@@ -39,6 +39,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{ url: string; key: string } | null>(null);
+  // Split lines, when splitting across categories; null when it has one category.
+  const [lines, setLines] = useState<Array<{ categoryId: string; amountMajor: string }> | null>(null);
 
   const categories = useQuery({
     queryKey: qk.categories(workspaceId),
@@ -72,6 +74,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const transfer = values.type === "transfer";
+      const splitting = Boolean(lines) && !transfer;
       const from = openAccounts.find((account) => account.id === values.accountId);
       const to = transfer ? openAccounts.find((account) => account.id === values.toAccountId) : undefined;
       const parsed = createTransactionBodySchema.safeParse({
@@ -80,7 +83,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         // The currency select is locked (and left out of the values) while an account is chosen.
         currency: openAccounts.find((account) => account.id === values.accountId)?.currency ?? values.currency,
         // A transfer moves money between your accounts; it isn't spending in a category.
-        categoryId: transfer ? null : values.categoryId || null,
+        categoryId: transfer || splitting ? null : values.categoryId || null,
+        splits: splitting ? lines!.map((line) => ({ categoryId: line.categoryId || null, amountMajor: line.amountMajor.trim() })) : null,
         accountId: values.accountId || null,
         toAccountId: to?.id ?? null,
         toAmountMajor: to && from && to.currency !== from.currency ? values.toAmountMajor : null,
@@ -119,6 +123,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         clearing: "cleared",
       });
       setReceipt(null);
+      setLines(null);
       setOpen(false);
     },
     onError: (err) => setError(err instanceof Error ? err.message : "Failed"),
@@ -127,6 +132,26 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
   const accountId = useWatch({ control: form.control, name: "accountId" });
   const chosenAccount = openAccounts.find((account) => account.id === accountId);
   const isTransfer = useWatch({ control: form.control, name: "type" }) === "transfer";
+  const amountMajor = useWatch({ control: form.control, name: "amountMajor" });
+  // What's left to give a line, so the split can be balanced before saving.
+  const splitLeft = (() => {
+    if (!lines) return "";
+    const toMinor = (major: string) => {
+      try {
+        return major.trim() ? parseMajorToMinor(major.trim()) : 0;
+      } catch {
+        return null;
+      }
+    };
+    const total = toMinor(amountMajor);
+    const used = lines.reduce<number | null>((sum, line) => {
+      const value = toMinor(line.amountMajor);
+      return sum == null || value == null ? null : sum + value;
+    }, 0);
+    if (total == null || used == null) return "";
+    const left = total - used;
+    return left === 0 ? "Adds up" : left > 0 ? `${formatMinorToMajor(left)} left to split` : `${formatMinorToMajor(-left)} over`;
+  })();
   const toAccountId = useWatch({ control: form.control, name: "toAccountId" });
   const toAccount = openAccounts.find((account) => account.id === toAccountId);
   const crossCurrency = Boolean(isTransfer && chosenAccount && toAccount && chosenAccount.currency !== toAccount.currency);
@@ -223,17 +248,77 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             <Input id="to-amount" inputMode="decimal" className="font-mono tabular-nums" placeholder="0.00" {...form.register("toAmountMajor")} />
           </div>
         ) : null}
-        {isTransfer ? null : <div>
-          <Label htmlFor="category">Category</Label>
-          <Select id="category" {...form.register("categoryId")}>
-            <option value="">Uncategorized</option>
-            {categoryTree(categories.data?.categories ?? []).map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.label}
-              </option>
+        {isTransfer ? null : lines ? (
+          <fieldset aria-label="Split" className="space-y-2 rounded-[var(--r-md)] border border-[var(--hairline)] p-3">
+            <div className="flex items-baseline justify-between">
+              <legend className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">Split across categories</legend>
+              <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" onClick={() => setLines(null)}>
+                Use one category
+              </button>
+            </div>
+            {lines.map((line, i) => (
+              <div key={i} className="grid grid-cols-[1fr_7rem_auto] items-center gap-2">
+                <Select
+                  aria-label={`Line ${i + 1} category`}
+                  value={line.categoryId}
+                  onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, categoryId: e.target.value } : l)))}
+                >
+                  <option value="">Uncategorized</option>
+                  {categoryTree(categories.data?.categories ?? []).map((category) => (
+                    <option key={category.id} value={category.id}>{category.label}</option>
+                  ))}
+                </Select>
+                <Input
+                  aria-label={`Line ${i + 1} amount`}
+                  inputMode="decimal"
+                  className="font-mono tabular-nums"
+                  placeholder="0.00"
+                  value={line.amountMajor}
+                  onChange={(e) => setLines(lines.map((l, j) => (j === i ? { ...l, amountMajor: e.target.value } : l)))}
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove line ${i + 1}`}
+                  className="text-xs text-[var(--muted-foreground)] hover:text-[var(--balance-negative)] disabled:opacity-40"
+                  disabled={lines.length <= 2}
+                  onClick={() => setLines(lines.filter((_, j) => j !== i))}
+                >
+                  Remove
+                </button>
+              </div>
             ))}
-          </Select>
-        </div>}
+            <div className="flex items-center justify-between">
+              <button type="button" className="text-xs underline" onClick={() => setLines([...lines, { categoryId: "", amountMajor: "" }])}>
+                Add line
+              </button>
+              <p className="font-mono text-xs text-[var(--muted-foreground)]" aria-live="polite">{splitLeft}</p>
+            </div>
+          </fieldset>
+        ) : (
+          <div>
+            <div className="flex items-baseline justify-between">
+              <Label htmlFor="category">Category</Label>
+              <button
+                type="button"
+                className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                onClick={() => setLines([
+                  { categoryId: form.getValues("categoryId"), amountMajor: form.getValues("amountMajor") },
+                  { categoryId: "", amountMajor: "" },
+                ])}
+              >
+                Split
+              </button>
+            </div>
+            <Select id="category" {...form.register("categoryId")}>
+              <option value="">Uncategorized</option>
+              {categoryTree(categories.data?.categories ?? []).map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div>
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" {...form.register("note")} />

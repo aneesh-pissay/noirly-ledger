@@ -5,6 +5,7 @@ import { Transaction, Workspace, WorkspaceMember } from "@/src/server/models";
 import { toBaseAmount } from "@/src/server/fx";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
+import { storedSplits } from "@/src/server/splits";
 import type { RecurrenceFrequency } from "@/src/core/models/enums";
 
 function noonUtc(date: Date): Date {
@@ -75,6 +76,8 @@ export async function runRecurringEngine(asOf = new Date()): Promise<{ created: 
               currency: template.currency,
               baseAmountMinor,
               categoryId: template.categoryId,
+              // Each line's base share follows this occurrence's rate.
+              splits: storedSplits(template.splits ?? [], baseAmountMinor),
               accountId: template.accountId ?? null,
               toAccountId: template.toAccountId ?? null,
               toAmountMinor: template.toAmountMinor ?? null,
@@ -97,12 +100,18 @@ export async function runRecurringEngine(asOf = new Date()): Promise<{ created: 
         created += 1;
         posted += 1;
 
-        if (template.type === "expense" && template.categoryId) {
-          await maybeNotifyBudgetThreshold({
-            workspaceId: workspaceKey,
-            categoryId: template.categoryId.toString(),
-            addedExpenseMinor: baseAmountMinor,
-          });
+        if (template.type === "expense") {
+          const lines = template.splits?.length
+            ? storedSplits(template.splits, baseAmountMinor)
+            : [{ categoryId: template.categoryId, baseAmountMinor }];
+          for (const line of lines) {
+            if (!line.categoryId) continue;
+            await maybeNotifyBudgetThreshold({
+              workspaceId: workspaceKey,
+              categoryId: line.categoryId.toString(),
+              addedExpenseMinor: line.baseAmountMinor,
+            });
+          }
         }
       }
 
