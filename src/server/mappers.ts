@@ -1,3 +1,4 @@
+import { clearingOf } from "@/src/core/clearing";
 import type {
   ApprovalRequest,
   Budget,
@@ -78,6 +79,7 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     refundOfId: doc.refundOfId ? doc.refundOfId.toString() : null,
     // Filled in where it's listed; see withRefunded.
     refundedMinor: 0,
+    clearing: clearingOf(doc.clearing),
     date: isoDay(doc.date)!,
     note: doc.note ?? null,
     // Built from the key, not the stored URL: older rows hold public R2 links.

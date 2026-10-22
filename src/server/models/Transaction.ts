@@ -10,6 +10,7 @@ import {
   RECURRENCE_FREQUENCIES,
   TRANSACTION_TYPES,
 } from "@/src/core/models/enums";
+import { CLEARING_STATES } from "@/src/core/clearing";
 
 const recurrenceSchema = new Schema(
   {
@@ -67,6 +68,8 @@ const transactionSchema = new Schema(
       default: null,
       index: true,
     },
+    // Pending, cleared or reconciled against the bank; missing on older rows, which count as cleared.
+    clearing: { type: String, enum: CLEARING_STATES, default: "cleared" },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

@@ -71,6 +71,7 @@ import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-th
 import { assertTransactionAccount, resolveTransfer } from "@/src/server/accounts";
 import { expenseToRefund, refundedByExpense, SPEND_TYPES, spentSum } from "@/src/server/refunds";
 import { spendSign } from "@/src/core/refunds";
+import { clearingOf, reconciledChange } from "@/src/core/clearing";
 
 type ProviderContext = {
   userId: string;
@@ -337,6 +338,9 @@ export function createMongoLedgerProvider(
     async createTransaction(input: CreateTransactionInput): Promise<Transaction> {
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
+        if (input.clearing === "reconciled") {
+          throw new ApiError(400, "invalid_request", "Transactions become reconciled when you reconcile their account");
+        }
         let refundOf: Awaited<ReturnType<typeof expenseToRefund>> | null = null;
         if (input.type === "refund") {
           refundOf = await expenseToRefund(workspace._id, input);
@@ -376,6 +380,7 @@ export function createMongoLedgerProvider(
           accountId: optionalOid(accountId),
           ...transfer,
           refundOfId: refundOf?._id ?? null,
+          clearing: input.clearing ?? "cleared",
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -408,6 +413,26 @@ export function createMongoLedgerProvider(
         // skip approval and leave the pool's total wrong.
         if (doc.budgetPoolId) {
           throw new ApiError(409, "pool_expense_locked", "Pool expenses can't be edited. Delete it and submit a new one.");
+        }
+        // A reconciled transaction matched a statement; it changes only after being marked cleared again.
+        const clearing = clearingOf(doc.clearing);
+        const locked = reconciledChange(clearing, {
+          type: doc.type,
+          amountMinor: doc.amountMinor,
+          currency: doc.currency,
+          date: isoDate(doc.date),
+          accountId: doc.accountId?.toString() ?? null,
+          toAccountId: doc.toAccountId?.toString() ?? null,
+          toAmountMinor: doc.toAmountMinor ?? null,
+        }, patch);
+        if (locked) throw new ApiError(409, "reconciled", "This transaction is reconciled. Mark it cleared before changing it.");
+        if (patch.clearing && patch.clearing !== clearing) {
+          if (patch.clearing === "reconciled") {
+            throw new ApiError(400, "invalid_request", "Transactions become reconciled when you reconcile their account");
+          }
+          // Undoing a reconciliation reopens a checked statement, so it takes the role that reconciles.
+          if (clearing === "reconciled") await requireAction(ctx.userId, doc.workspaceId.toString(), "budget.manage");
+          doc.clearing = patch.clearing;
         }
         // Refunds are made from their expense, so the link between them stays put.
         const changesType = Boolean(patch.type && patch.type !== doc.type);
@@ -489,6 +514,9 @@ export function createMongoLedgerProvider(
         const doc = await TransactionModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
         await requireTransactionEditor(ctx.userId, doc);
+        if (clearingOf(doc.clearing) === "reconciled") {
+          throw new ApiError(409, "reconciled", "This transaction is reconciled. Mark it cleared before deleting it.");
+        }
         if (doc.type === "expense" && (await refundedByExpense([doc._id])).size) {
           throw new ApiError(409, "has_refunds", "This expense has refunds. Delete them first.");
         }

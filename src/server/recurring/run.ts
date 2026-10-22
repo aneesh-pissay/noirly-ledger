@@ -78,6 +78,8 @@ export async function runRecurringEngine(asOf = new Date()): Promise<{ created: 
               accountId: template.accountId ?? null,
               toAccountId: template.toAccountId ?? null,
               toAmountMinor: template.toAmountMinor ?? null,
+              // Posted by the schedule, not seen on a statement yet.
+              clearing: "pending",
               budgetPoolId: null,
               date: stamp,
               note: template.note,

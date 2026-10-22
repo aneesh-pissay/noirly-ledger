@@ -49,6 +49,7 @@ export async function POST(
       accountId: body.accountId ?? null,
       toAccountId: body.toAccountId ?? null,
       refundOfId: body.refundOfId ?? null,
+      clearing: body.clearing,
       toAmountMinor: body.toAmountMajor ? parseMajorToMinor(body.toAmountMajor) : null,
       date: body.date,
       note: body.note ?? null,

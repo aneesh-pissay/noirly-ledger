@@ -24,6 +24,9 @@ const accountSchema = new Schema(
     openingDate: { type: Date, required: true },
     institution: { type: String, default: null, trim: true, maxlength: 80 },
     archivedAt: { type: Date, default: null },
+    // The last statement it was reconciled to: the day it ran through and its balance then.
+    reconciledThrough: { type: Date, default: null },
+    reconciledBalanceMinor: { type: Number, default: null },
     createdById: { type: Schema.Types.ObjectId, ref: "LedgerUser", required: true },
   },
   { timestamps: true },

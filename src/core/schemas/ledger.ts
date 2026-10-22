@@ -5,6 +5,7 @@ import {
   TRANSACTION_TYPES,
 } from "@/src/core/models/enums";
 import { ACCOUNT_KINDS } from "@/src/core/accounts";
+import { CLEARING_STATES } from "@/src/core/clearing";
 
 export const currencyCode = z
   .string()
@@ -34,6 +35,7 @@ export const createTransactionBodySchema = z.object({
   toAmountMajor: amountMajorSchema.nullable().optional(),
   /** Refunds: the expense this takes back. */
   refundOfId: z.string().min(1).nullable().optional(),
+  clearing: z.enum(CLEARING_STATES).optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().max(2000).nullable().optional(),
   /** Accepted for older clients but ignored: the server builds it from the key. */
@@ -149,4 +151,10 @@ export const createInviteBodySchema = z.object({
 
 export const updateMemberBodySchema = z.object({
   role: z.enum(["owner", "approver", "member"]),
+});
+
+/** A statement to reconcile an account to: its closing balance and the last day it covers. */
+export const reconcileAccountBodySchema = z.object({
+  statementMajor: signedAmountMajorSchema,
+  through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });

@@ -12,6 +12,7 @@ import { Button, PageContainer } from "@noirly-dev/ui";
 import { useUIStore } from "@/src/stores/ui-store";
 import type { Transaction } from "@/src/core/sync/types";
 import { RefundDialog } from "@/src/features/transactions/RefundDialog";
+import { CLEARING_LABEL } from "@/src/core/clearing";
 
 type Props = {
   workspaceId: string;
@@ -47,6 +48,14 @@ export function TransactionScreen({
   const filtered = accountFilter ? accounts.data?.accounts.find((a) => a.id === accountFilter) : undefined;
 
   const [refunding, setRefunding] = useState<Transaction | null>(null);
+  const setClearing = useMutation({
+    mutationFn: ({ id, clearing }: { id: string; clearing: "pending" | "cleared" }) => api.updateTransaction(id, { clearing }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] }),
+        queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
+      ]),
+  });
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteTransaction(id),
     onSuccess: () =>
@@ -86,20 +95,21 @@ export function TransactionScreen({
         </div>
         <Button onClick={() => setOpen(true)}>Add</Button>
       </div>
-      {remove.error ? (
+      {remove.error || setClearing.error ? (
         <p role="alert" className="mt-3 text-sm text-[var(--balance-negative)]">
-          {remove.error instanceof Error ? remove.error.message : "Couldn't delete"}
+          {(remove.error ?? setClearing.error)?.message ?? "Couldn't save"}
         </p>
       ) : null}
       <RefundDialog workspaceId={workspaceId} expense={refunding} onClose={() => setRefunding(null)} />
 
       <div className="mt-6 overflow-hidden rounded-xl border border-[var(--hairline)]">
-        <div className="grid grid-cols-[7rem_1fr_1fr_1fr_7rem_8rem_7rem] border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        <div className="grid grid-cols-[7rem_1fr_1fr_1fr_7rem_6rem_8rem_7rem] border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
           <span>Date</span>
           <span>Category</span>
           <span>Account</span>
           <span>Note</span>
           <span>Type</span>
+          <span>Status</span>
           <span className="text-right">Amount</span>
           <span />
         </div>
@@ -122,7 +132,7 @@ export function TransactionScreen({
                 return (
                   <div
                     key={txn.id}
-                    className="absolute left-0 grid w-full grid-cols-[7rem_1fr_1fr_1fr_7rem_8rem_7rem] items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
+                    className="absolute left-0 grid w-full grid-cols-[7rem_1fr_1fr_1fr_7rem_6rem_8rem_7rem] items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -140,6 +150,23 @@ export function TransactionScreen({
                       {txn.type === "expense" && txn.refundedMinor
                         ? txn.refundedMinor >= txn.amountMinor ? "Refunded" : "Part refunded"
                         : txn.type.charAt(0).toUpperCase() + txn.type.slice(1)}
+                    </span>
+                    <span>
+                      {!txn.isPosted ? (
+                        <span className="text-[var(--muted-foreground)]">—</span>
+                      ) : txn.clearing === "reconciled" ? (
+                        <span className="text-xs text-[var(--muted-foreground)]" title="Matched to a statement">{CLEARING_LABEL.reconciled}</span>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Mark ${txn.clearing === "pending" ? "cleared" : "pending"}`}
+                          disabled={setClearing.isPending}
+                          className={`rounded-full border border-[var(--hairline)] px-2 py-0.5 text-xs ${txn.clearing === "pending" ? "text-[var(--muted-foreground)]" : "text-[var(--balance-positive)]"}`}
+                          onClick={() => setClearing.mutate({ id: txn.id, clearing: txn.clearing === "pending" ? "cleared" : "pending" })}
+                        >
+                          {CLEARING_LABEL[txn.clearing]}
+                        </button>
+                      )}
                     </span>
                     <span className="text-right">
                       <MoneyText
@@ -166,13 +193,16 @@ export function TransactionScreen({
                           Refund
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--balance-negative)]"
-                        onClick={() => remove.mutate(txn.id)}
-                      >
-                        Delete
-                      </button>
+                      {/* Reconciled ones are marked cleared before they can go. */}
+                      {txn.clearing !== "reconciled" ? (
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--balance-negative)]"
+                          onClick={() => remove.mutate(txn.id)}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </span>
                   </div>
                 );

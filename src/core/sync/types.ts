@@ -8,6 +8,7 @@ import type {
 } from "@/src/core/models/enums";
 import type { MoneyMinor } from "@/src/core/money";
 import type { AccountKind } from "@/src/core/accounts";
+import type { Clearing } from "@/src/core/clearing";
 
 export type {
   ApprovalStatus,
@@ -78,6 +79,8 @@ export type Transaction = {
   refundOfId: string | null;
   /** Expenses: how much refunds have taken back so far, in its currency. */
   refundedMinor: MoneyMinor;
+  /** Against the bank: pending, cleared, or reconciled to a statement. */
+  clearing: Clearing;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -105,7 +108,12 @@ export type Account = {
   institution: string | null;
   archived: boolean;
   balanceMinor: MoneyMinor;
+  /** The balance leaving out pending transactions: what the bank should show. */
+  clearedBalanceMinor: MoneyMinor;
+  pendingCount: number;
   transactionCount: number;
+  reconciledThrough: string | null;
+  reconciledBalanceMinor: MoneyMinor | null;
 };
 
 export type Budget = {
@@ -266,6 +274,8 @@ export type CreateTransactionInput = {
   toAccountId?: string | null;
   toAmountMinor?: number | null;
   refundOfId?: string | null;
+  /** New transactions are pending or cleared; only reconciling an account makes them reconciled. */
+  clearing?: Clearing;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;

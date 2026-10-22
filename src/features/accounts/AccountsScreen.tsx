@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Input, Label, PageContainer } from "@noirly-dev/ui";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
-import { COMMON_CURRENCIES } from "@/src/core/money";
+import { COMMON_CURRENCIES, formatMinorToMajor } from "@/src/core/money";
 import { isoDate } from "@/src/core/budgets/period";
 import { ACCOUNT_KINDS, ACCOUNT_KIND_LABEL, isLiability, type AccountKind } from "@/src/core/accounts";
 import type { Account } from "@/src/core/sync/types";
@@ -43,6 +43,23 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
     onError: (err: Error) => setError(err.message),
   });
 
+  const [reconciling, setReconciling] = useState<string | null>(null);
+  const [statement, setStatement] = useState("");
+  const [through, setThrough] = useState(isoDate(new Date()));
+  const [reconcileNote, setReconcileNote] = useState<string | null>(null);
+  const reconcile = useMutation({
+    mutationFn: (accountId: string) => api.reconcileAccount(accountId, { statementMajor: statement.trim(), through }),
+    onMutate: () => { setError(null); setReconcileNote(null); },
+    onSuccess: ({ reconciled }) => {
+      setReconciling(null);
+      setStatement("");
+      setReconcileNote(`Reconciled ${reconciled} transaction${reconciled === 1 ? "" : "s"}.`);
+      refresh();
+      void queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] });
+    },
+    onError: (err: Error) => setError(err.message),
+  });
+
   const list = accounts.data?.accounts ?? [];
   const open = list.filter((a) => !a.archived);
   const archived = list.filter((a) => a.archived);
@@ -66,8 +83,23 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
         <MoneyText amountMinor={account.balanceMinor} currency={account.currency}
           tone={isLiability(account.kind) ? (account.balanceMinor > 0 ? "negative" : "default") : account.balanceMinor < 0 ? "negative" : "default"} />
         {isLiability(account.kind) ? <p className="text-[11px] text-[var(--muted-foreground)]">owed</p> : null}
+        {account.pendingCount ? (
+          <p className="font-mono text-[11px] text-[var(--muted-foreground)]">
+            {formatMinorToMajor(account.clearedBalanceMinor)} cleared · {account.pendingCount} pending
+          </p>
+        ) : null}
+        {account.reconciledThrough ? (
+          <p className="text-[11px] text-[var(--muted-foreground)]">Reconciled through {account.reconciledThrough}</p>
+        ) : null}
       </div>
       <div className="flex gap-2">
+        {!account.archived ? (
+          <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            aria-expanded={reconciling === account.id}
+            onClick={() => { setError(null); setReconciling(reconciling === account.id ? null : account.id); }}>
+            Reconcile
+          </button>
+        ) : null}
         <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" disabled={change.isPending}
           onClick={() => change.mutate(() => api.updateAccount(account.id, { archived: !account.archived }))}>
           {account.archived ? "Reopen" : "Archive"}
@@ -80,6 +112,26 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
           </button>
         ) : null}
       </div>
+      {reconciling === account.id ? (
+        <form
+          aria-label={`Reconcile ${account.name}`}
+          className="flex w-full flex-wrap items-end gap-3 pt-2"
+          onSubmit={(event) => { event.preventDefault(); if (statement.trim()) reconcile.mutate(account.id); }}
+        >
+          <div>
+            <Label htmlFor={`st-${account.id}`}>Statement {isLiability(account.kind) ? "amount owed" : "balance"} ({account.currency})</Label>
+            <Input id={`st-${account.id}`} className="font-mono" inputMode="decimal" value={statement} onChange={(e) => setStatement(e.target.value)} required />
+          </div>
+          <div>
+            <Label htmlFor={`th-${account.id}`}>Statement ends</Label>
+            <Input id={`th-${account.id}`} type="date" className="font-mono" value={through} onChange={(e) => setThrough(e.target.value)} required />
+          </div>
+          <Button type="submit" disabled={reconcile.isPending || !statement.trim()}>{reconcile.isPending ? "Checking…" : "Reconcile"}</Button>
+          <p className="w-full text-xs text-[var(--muted-foreground)]">
+            Cleared transactions up to that day should add up to the statement. Pending ones are left out.
+          </p>
+        </form>
+      ) : null}
     </li>
   );
 
@@ -123,12 +175,14 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
           <Label htmlFor="a-inst">Bank or provider (optional)</Label>
           <Input id="a-inst" value={institution} onChange={(e) => setInstitution(e.target.value)} maxLength={80} />
         </div>
-        {error ? <p role="alert" className="text-sm text-[var(--balance-negative)] sm:col-span-2">{error}</p> : null}
+        {error && !reconciling ? <p role="alert" className="text-sm text-[var(--balance-negative)] sm:col-span-2">{error}</p> : null}
         <div className="sm:col-span-2">
           <Button type="submit" disabled={create.isPending || !name.trim()}>{create.isPending ? "Adding…" : "Add account"}</Button>
         </div>
       </form>
 
+      {error && reconciling ? <p role="alert" className="mt-6 text-sm text-[var(--balance-negative)]">{error}</p> : null}
+      {reconcileNote ? <p role="status" className="mt-6 text-sm text-[var(--balance-positive)]">{reconcileNote}</p> : null}
       {accounts.isPending ? <p className="mt-6 text-sm text-[var(--muted-foreground)]">Loading accounts…</p> : null}
       {accounts.data && !list.length ? <p className="mt-6 text-sm text-[var(--muted-foreground)]">No accounts yet.</p> : null}
       {groups.map((group) => (group.items.length ? (

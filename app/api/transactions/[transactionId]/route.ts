@@ -33,6 +33,7 @@ export async function PATCH(
       categoryId: body.categoryId,
       accountId: body.accountId,
       toAccountId: body.toAccountId,
+      clearing: body.clearing,
       toAmountMinor: body.toAmountMajor === undefined ? undefined : body.toAmountMajor === null ? null : parseMajorToMinor(body.toAmountMajor),
       date: body.date,
       note: body.note,

@@ -24,6 +24,7 @@ type FormValues = {
   date: string;
   note: string;
   frequency: "" | "daily" | "weekly" | "monthly" | "yearly";
+  clearing: "cleared" | "pending";
 };
 
 type Props = {
@@ -63,6 +64,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
       date: isoDate(new Date()),
       note: "",
       frequency: "",
+      clearing: "cleared",
     },
   });
 
@@ -85,6 +87,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         note: values.note || null,
         receiptUrl: receipt?.url ?? null,
         receiptStorageKey: receipt?.key ?? null,
+        clearing: values.clearing,
         recurrence: values.frequency
           ? { frequency: values.frequency, interval: 1 }
           : null,
@@ -112,6 +115,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         date: isoDate(new Date()),
         note: "",
         frequency: "",
+        clearing: "cleared",
       });
       setReceipt(null);
       setOpen(false);
@@ -233,14 +237,23 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" {...form.register("note")} />
         </div>
-        <div>
-          <Label htmlFor="frequency">Recurring</Label>
-          <Select id="frequency" {...form.register("frequency")}>
-            <option value="">One-time</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </Select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="frequency">Recurring</Label>
+            <Select id="frequency" {...form.register("frequency")}>
+              <option value="">One-time</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="clearing">Status</Label>
+            <Select id="clearing" {...form.register("clearing")}>
+              <option value="cleared">Cleared</option>
+              <option value="pending">Pending</option>
+            </Select>
+          </div>
         </div>
         <div>
           <Label htmlFor="receipt">Receipt (optional)</Label>

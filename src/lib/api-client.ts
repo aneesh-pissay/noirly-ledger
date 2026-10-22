@@ -112,6 +112,9 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     );
   },
+  updateTransaction(transactionId: string, body: Record<string, unknown>) {
+    return request<{ transaction: Transaction }>(`/api/transactions/${transactionId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
   deleteTransaction(transactionId: string) {
     return request<{ ok: boolean }>(`/api/transactions/${transactionId}`, {
       method: "DELETE",
@@ -141,6 +144,9 @@ export const api = {
   },
   updateAccount(accountId: string, body: { name?: string; archived?: boolean; openingMajor?: string; institution?: string | null }) {
     return request<{ account: Account }>(`/api/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  reconcileAccount(accountId: string, body: { statementMajor: string; through: string }) {
+    return request<{ account: Account; reconciled: number }>(`/api/accounts/${accountId}/reconcile`, { method: "POST", body: JSON.stringify(body) });
   },
   deleteAccount(accountId: string) {
     return request<{ ok: boolean }>(`/api/accounts/${accountId}`, { method: "DELETE" });

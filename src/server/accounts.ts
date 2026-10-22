@@ -6,6 +6,8 @@ import { requireAction, requireMembershipRole } from "@/src/server/workspace/mem
 import { accountBalance, checkTransfer, type AccountKind, type BalanceEntry } from "@/src/core/accounts";
 import type { TransactionType } from "@/src/core/models/enums";
 import type { Account } from "@/src/core/sync/types";
+import { reconcileGap } from "@/src/core/clearing";
+import { formatMinorToMajor } from "@/src/core/money";
 
 /** A malformed id is the caller's mistake (400), not a server error. */
 function oid(id: string | Types.ObjectId) {
@@ -29,31 +31,34 @@ function day(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-type Totals = { entries: BalanceEntry[]; count: number };
+type Totals = { entries: Array<BalanceEntry & { pending: boolean }>; count: number; pendingCount: number };
 
-/** Posted, live transactions per account, summed by type; a transfer counts out of one account and into the other. */
+const pendingExpr = { $eq: ["$clearing", "pending"] };
+
+/** Posted, live transactions per account, summed by type and whether they're pending; a transfer counts out of one account and into the other. */
 async function totals(accountIds: Types.ObjectId[]) {
   const byAccount = new Map<string, Totals>();
   if (!accountIds.length) return byAccount;
   const live = { deletedAt: null, isPosted: true };
   const [out, incoming] = await Promise.all([
-    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType }; amountMinor: number; count: number }>([
+    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType; pending: boolean }; amountMinor: number; count: number }>([
       { $match: { accountId: { $in: accountIds }, ...live } },
-      { $group: { _id: { accountId: "$accountId", type: "$type" }, amountMinor: { $sum: "$amountMinor" }, count: { $sum: 1 } } },
+      { $group: { _id: { accountId: "$accountId", type: "$type", pending: pendingExpr }, amountMinor: { $sum: "$amountMinor" }, count: { $sum: 1 } } },
     ]),
-    TransactionModel.aggregate<{ _id: Types.ObjectId; amountMinor: number; count: number }>([
+    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; pending: boolean }; amountMinor: number; count: number }>([
       { $match: { toAccountId: { $in: accountIds }, type: "transfer", ...live } },
-      { $group: { _id: "$toAccountId", amountMinor: { $sum: "$toAmountMinor" }, count: { $sum: 1 } } },
+      { $group: { _id: { accountId: "$toAccountId", pending: pendingExpr }, amountMinor: { $sum: "$toAmountMinor" }, count: { $sum: 1 } } },
     ]),
   ]);
-  const add = (id: Types.ObjectId, type: BalanceEntry["type"], amountMinor: number, count: number) => {
-    const entry = byAccount.get(String(id)) ?? { entries: [], count: 0 };
-    entry.entries.push({ type, amountMinor });
+  const add = (id: Types.ObjectId, type: BalanceEntry["type"], pending: boolean, amountMinor: number, count: number) => {
+    const entry = byAccount.get(String(id)) ?? { entries: [], count: 0, pendingCount: 0 };
+    entry.entries.push({ type, amountMinor, pending });
     entry.count += count;
+    if (pending) entry.pendingCount += count;
     byAccount.set(String(id), entry);
   };
-  for (const row of out) add(row._id.accountId, row._id.type === "transfer" ? "transfer_out" : row._id.type, row.amountMinor, row.count);
-  for (const row of incoming) add(row._id, "transfer_in", row.amountMinor, row.count);
+  for (const row of out) add(row._id.accountId, row._id.type === "transfer" ? "transfer_out" : row._id.type, row._id.pending, row.amountMinor, row.count);
+  for (const row of incoming) add(row._id.accountId, "transfer_in", row._id.pending, row.amountMinor, row.count);
   return byAccount;
 }
 
@@ -75,7 +80,11 @@ function map(doc: AccountDocument, total?: Totals): Account {
     institution: doc.institution ?? null,
     archived: Boolean(doc.archivedAt),
     balanceMinor: accountBalance(kind, doc.openingBalanceMinor, total?.entries ?? []),
+    clearedBalanceMinor: accountBalance(kind, doc.openingBalanceMinor, (total?.entries ?? []).filter((e) => !e.pending)),
+    pendingCount: total?.pendingCount ?? 0,
     transactionCount: total?.count ?? 0,
+    reconciledThrough: doc.reconciledThrough ? day(doc.reconciledThrough) : null,
+    reconciledBalanceMinor: doc.reconciledBalanceMinor ?? null,
   };
 }
 
@@ -211,4 +220,47 @@ export async function resolveTransfer(
   });
   if (!result.ok) throw new ApiError(400, "invalid_request", result.error);
   return { toAccountId: oid(to!.id), toAmountMinor: result.toAmountMinor };
+}
+
+/**
+ * Checks the account's cleared transactions through a statement date against
+ * the statement's balance. If they agree, those transactions become
+ * reconciled; if not, nothing changes and the error says by how much they differ.
+ */
+export function reconcileAccount(userId: string, accountId: string, input: { statementMinor: number; through: string }) {
+  return withDb(async () => {
+    const doc = await requireAccount(userId, accountId);
+    const filter = {
+      $or: [{ accountId: doc._id }, { toAccountId: doc._id }],
+      deletedAt: null,
+      isPosted: true,
+      clearing: { $ne: "pending" as const },
+      date: { $lte: new Date(`${input.through}T23:59:59.999Z`) },
+    };
+    const rows = await TransactionModel.find(filter).select("type amountMinor toAmountMinor accountId toAccountId").lean();
+    const entries: BalanceEntry[] = rows.map((row) =>
+      row.type !== "transfer"
+        ? { type: row.type, amountMinor: row.amountMinor }
+        : String(row.toAccountId) === String(doc._id)
+          ? { type: "transfer_in", amountMinor: row.toAmountMinor ?? row.amountMinor }
+          : { type: "transfer_out", amountMinor: row.amountMinor },
+    );
+    const cleared = accountBalance(doc.kind as AccountKind, doc.openingBalanceMinor, entries);
+    const gap = reconcileGap(cleared, input.statementMinor);
+    if (gap !== 0) {
+      throw new ApiError(
+        409,
+        "reconcile_mismatch",
+        `Cleared transactions through ${input.through} come to ${formatMinorToMajor(cleared)} ${doc.currency}, ${formatMinorToMajor(Math.abs(gap))} ${gap > 0 ? "less" : "more"} than the statement. Find the difference and try again.`,
+      );
+    }
+    const { modifiedCount } = await TransactionModel.updateMany(
+      { ...filter, clearing: { $in: ["cleared", null] } },
+      { $set: { clearing: "reconciled" } },
+    );
+    doc.reconciledThrough = new Date(`${input.through}T12:00:00.000Z`);
+    doc.reconciledBalanceMinor = input.statementMinor;
+    await doc.save();
+    return { account: await withBalance(doc.toObject()), reconciled: modifiedCount };
+  });
 }
