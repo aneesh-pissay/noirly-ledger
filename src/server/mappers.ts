@@ -55,6 +55,7 @@ export function mapCategory(doc: CategoryDocument): Category {
     icon: doc.icon,
     color: doc.color,
     isSystem: Boolean(doc.isSystem),
+    parentId: doc.parentId ? doc.parentId.toString() : null,
     archivedAt: iso(doc.archivedAt),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,

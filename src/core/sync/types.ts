@@ -48,6 +48,8 @@ export type Category = {
   icon: string;
   color: string;
   isSystem: boolean;
+  /** Set on a subcategory: its top-level category. */
+  parentId: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -294,6 +296,7 @@ export type CreateCategoryInput = {
   name: string;
   icon: string;
   color: string;
+  parentId?: string | null;
 };
 
 export type UpsertBudgetInput = {

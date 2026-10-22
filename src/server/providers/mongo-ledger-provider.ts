@@ -72,6 +72,8 @@ import { assertTransactionAccount, resolveTransfer } from "@/src/server/accounts
 import { expenseToRefund, refundedByExpense, SPEND_TYPES, spentSum } from "@/src/server/refunds";
 import { spendSign } from "@/src/core/refunds";
 import { clearingOf, reconciledChange } from "@/src/core/clearing";
+import { checkParent, topLevelOf } from "@/src/core/categories";
+import { budgetCategoryIds } from "@/src/server/categories/tree";
 
 type ProviderContext = {
   userId: string;
@@ -97,6 +99,22 @@ function optionalOid(id: string | null | undefined) {
 }
 
 /** A category id must name a live category of the same workspace. */
+/** A parent must be a live top-level category in the workspace, and a category with subcategories stays top-level. */
+async function assertParent(workspaceId: Types.ObjectId, categoryId: Types.ObjectId | null, parentId: string | null) {
+  if (!parentId) return;
+  const parent = Types.ObjectId.isValid(parentId)
+    ? await CategoryModel.findOne({ _id: new Types.ObjectId(parentId), workspaceId, deletedAt: null, archivedAt: null }).select("parentId").lean()
+    : null;
+  const hasChildren = categoryId ? Boolean(await CategoryModel.exists({ parentId: categoryId, deletedAt: null })) : false;
+  const result = checkParent({
+    categoryId: categoryId ? String(categoryId) : null,
+    hasChildren,
+    parent: parent ? { id: String(parent._id), parentId: parent.parentId ? String(parent.parentId) : null } : null,
+    parentId,
+  });
+  if (!result.ok) throw new ApiError(400, "invalid_request", result.error);
+}
+
 async function assertCategory(workspaceId: Types.ObjectId, categoryId: string | null | undefined) {
   if (!categoryId) return;
   const exists = await CategoryModel.exists({
@@ -236,12 +254,14 @@ export function createMongoLedgerProvider(
     async createCategory(input: CreateCategoryInput): Promise<Category> {
       return withDb(async () => {
         await requireAction(ctx.userId, input.workspaceId, "budget.manage");
+        await assertParent(oid(input.workspaceId), null, input.parentId ?? null);
         const doc = await CategoryModel.create({
           workspaceId: oid(input.workspaceId),
           name: input.name.trim(),
           icon: input.icon,
           color: input.color,
           isSystem: false,
+          parentId: optionalOid(input.parentId),
         });
         return mapCategory(doc);
       });
@@ -255,6 +275,10 @@ export function createMongoLedgerProvider(
         if (patch.name) doc.name = patch.name;
         if (patch.icon) doc.icon = patch.icon;
         if (patch.color) doc.color = patch.color;
+        if (patch.parentId !== undefined) {
+          await assertParent(doc.workspaceId, doc._id, patch.parentId);
+          doc.parentId = optionalOid(patch.parentId);
+        }
         await doc.save();
         return mapCategory(doc);
       });
@@ -271,6 +295,8 @@ export function createMongoLedgerProvider(
           doc.deletedAt = new Date();
         }
         await doc.save();
+        // Its subcategories stay, as top-level categories.
+        await CategoryModel.updateMany({ parentId: doc._id }, { $set: { parentId: null } });
       });
     },
 
@@ -1051,6 +1077,7 @@ export function createMongoLedgerProvider(
         ]);
 
         const categoryById = new Map(categories.map((c) => [c._id.toString(), c]));
+        const categoryNodes = categories.map((c) => ({ id: c._id.toString(), name: c.name, parentId: c.parentId?.toString() ?? null }));
         let incomeMinor = 0;
         let expenseMinor = 0;
         const byCategoryMap = new Map<
@@ -1070,12 +1097,12 @@ export function createMongoLedgerProvider(
             const spent = spendSign(txn.type) * txn.baseAmountMinor;
             expenseMinor += spent;
             bucket.expenseMinor += spent;
-            const key = txn.categoryId?.toString() ?? "uncategorized";
-            const category = txn.categoryId
-              ? categoryById.get(txn.categoryId.toString())
-              : null;
+            // Subcategories roll up into their top-level category here.
+            const topId = txn.categoryId ? topLevelOf(txn.categoryId.toString(), categoryNodes) : null;
+            const key = topId ?? "uncategorized";
+            const category = topId ? categoryById.get(topId) : null;
             const current = byCategoryMap.get(key) ?? {
-              categoryId: txn.categoryId?.toString() ?? null,
+              categoryId: topId,
               name: category?.name ?? "Uncategorized",
               color: category?.color ?? "#737373",
               amountMinor: 0,
@@ -1096,7 +1123,7 @@ export function createMongoLedgerProvider(
               {
                 $match: {
                   workspaceId: workspace._id,
-                  categoryId: budget.categoryId,
+                  categoryId: { $in: await budgetCategoryIds(budget.categoryId) },
                   type: { $in: SPEND_TYPES },
                   isPosted: true,
                   deletedAt: null,

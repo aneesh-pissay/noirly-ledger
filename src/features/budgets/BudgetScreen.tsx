@@ -9,6 +9,7 @@ import { Input, Label } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
 import { ProgressBar } from "@/src/components/ProgressBar";
 import { MoneyText } from "@/src/components/MoneyText";
+import { categoryTree } from "@/src/core/categories";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -39,8 +40,8 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
 
   const rows = dashboard.data?.summary.budgets ?? [];
   const categoryName = useMemo(() => {
-    const map = new Map((categories.data?.categories ?? []).map((c) => [c.id, c]));
-    return (id: string) => map.get(id)?.name ?? "Category";
+    const map = new Map(categoryTree(categories.data?.categories ?? []).map((c) => [c.id, c]));
+    return (id: string) => map.get(id)?.label ?? "Category";
   }, [categories.data]);
 
   return (
@@ -62,9 +63,9 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
             required
           >
             <option value="">Select</option>
-            {(categories.data?.categories ?? []).map((category) => (
+            {categoryTree(categories.data?.categories ?? []).map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {category.label}
               </option>
             ))}
           </Select>

@@ -66,12 +66,15 @@ export const api = {
   },
   createCategory(
     workspaceId: string,
-    body: { name: string; icon?: string; color?: string },
+    body: { name: string; icon?: string; color?: string; parentId?: string | null },
   ) {
     return request<{ category: Category }>(
       `/api/workspaces/${workspaceId}/categories`,
       { method: "POST", body: JSON.stringify(body) },
     );
+  },
+  updateCategory(categoryId: string, body: { name?: string; color?: string; parentId?: string | null }) {
+    return request<{ category: Category }>(`/api/categories/${categoryId}`, { method: "PATCH", body: JSON.stringify(body) });
   },
   deleteCategory(categoryId: string) {
     return request<{ ok: boolean }>(`/api/categories/${categoryId}`, {

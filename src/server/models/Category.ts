@@ -19,6 +19,8 @@ const categorySchema = new Schema(
     icon: { type: String, required: true, trim: true },
     color: { type: String, required: true, trim: true },
     isSystem: { type: Boolean, default: false },
+    // Set on a subcategory: its top-level category (one level deep; see src/core/categories.ts).
+    parentId: { type: Schema.Types.ObjectId, ref: "Category", default: null, index: true },
     archivedAt: { type: Date, default: null },
     deletedAt: { type: Date, default: null },
   },

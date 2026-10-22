@@ -70,17 +70,22 @@ export const updateAccountBodySchema = createAccountBodySchema
   .extend({ archived: z.boolean().optional() })
   .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
 
-export const createCategoryBodySchema = z.object({
+const categoryFields = {
   name: z.string().trim().min(1).max(80),
-  icon: z.string().trim().min(1).max(40).default("circle"),
-  color: z
-    .string()
-    .trim()
-    .regex(/^#([0-9a-fA-F]{6})$/)
-    .default("#52D3FE"),
+  icon: z.string().trim().min(1).max(40),
+  color: z.string().trim().regex(/^#([0-9a-fA-F]{6})$/),
+  /** Makes it a subcategory of this top-level category; null makes it top-level. */
+  parentId: z.string().min(1).nullable().optional(),
+};
+
+export const createCategoryBodySchema = z.object({
+  ...categoryFields,
+  icon: categoryFields.icon.default("circle"),
+  color: categoryFields.color.default("#52D3FE"),
 });
 
-export const updateCategoryBodySchema = createCategoryBodySchema.partial();
+/** No defaults here: a patch changes only what it names. */
+export const updateCategoryBodySchema = z.object(categoryFields).partial();
 
 export const upsertBudgetBodySchema = z.object({
   categoryId: z.string().min(1),

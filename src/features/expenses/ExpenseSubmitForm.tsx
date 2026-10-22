@@ -12,6 +12,7 @@ import { isoDate } from "@/src/core/budgets/period";
 import { Button, PageContainer } from "@noirly-dev/ui";
 import { Input, Label, Textarea } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
+import { categoryTree } from "@/src/core/categories";
 
 type FormValues = {
   budgetPoolId: string;
@@ -157,9 +158,9 @@ export function ExpenseSubmitForm({
           <Label htmlFor="category">Category</Label>
           <Select id="category" {...form.register("categoryId")}>
             <option value="">None</option>
-            {(categories.data?.categories ?? []).map((category) => (
+            {categoryTree(categories.data?.categories ?? []).map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {category.label}
               </option>
             ))}
           </Select>

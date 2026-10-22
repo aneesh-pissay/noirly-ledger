@@ -16,7 +16,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 
 | Phase | Done |
 | --- | --- |
-| 1. Accounts and the money model | 6 / 10 |
+| 1. Accounts and the money model | 7 / 10 |
 | 2. Budgeting | 0 / 9 |
 | 3. Transactions and imports | 0 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
@@ -58,7 +58,7 @@ _Everything after this builds on accounts. Today a transaction belongs to a work
 - [x] Pending, cleared and reconciled statuses (S) — done 2026-10-22
 - [x] Assets, liabilities and net worth (needs accounts) (M) — done 2026-10-22
 - [x] Available-to-spend and projected balances (upcoming recurring included) (M) — done 2026-10-22
-- [ ] Subcategories (S)
+- [x] Subcategories (S) — done 2026-10-22
 - [ ] Split one transaction across categories (M)
 - [ ] Tags, merchants and projects on transactions (M)
 - [ ] INR formatting with Indian numbering (lakh, crore), and the Indian financial year (April–March) or any fiscal start (S)

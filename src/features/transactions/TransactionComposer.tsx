@@ -12,6 +12,7 @@ import { Button, Dialog } from "@noirly-dev/ui";
 import { Input, Label, Textarea } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
 import { useUIStore } from "@/src/stores/ui-store";
+import { categoryTree } from "@/src/core/categories";
 
 type FormValues = {
   type: "expense" | "income" | "transfer";
@@ -226,9 +227,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
           <Label htmlFor="category">Category</Label>
           <Select id="category" {...form.register("categoryId")}>
             <option value="">Uncategorized</option>
-            {(categories.data?.categories ?? []).map((category) => (
+            {categoryTree(categories.data?.categories ?? []).map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {category.label}
               </option>
             ))}
           </Select>

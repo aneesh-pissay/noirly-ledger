@@ -15,6 +15,7 @@ import {
 } from "@/src/server/exports/csv";
 import { renderSummaryPdf, type PdfSummary } from "@/src/server/exports/pdf";
 import { spendSign } from "@/src/core/refunds";
+import { PATH_SEPARATOR } from "@/src/core/categories";
 import type { TransactionType } from "@/src/core/models/enums";
 
 export type ExportQuery = {
@@ -57,7 +58,15 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
   const users = await LedgerUser.find({
     _id: { $in: txns.map((t) => t.createdById) },
   });
-  const catById = new Map(categories.map((c) => [c._id.toString(), c.name]));
+  // Subcategories export as "Parent › Child".
+  const parents = await Category.find({ _id: { $in: categories.map((c) => c.parentId).filter((id): id is Types.ObjectId => Boolean(id)) } }).select("name").lean();
+  const parentName = new Map(parents.map((p) => [p._id.toString(), p.name]));
+  const catById = new Map(
+    categories.map((c) => {
+      const parent = c.parentId ? parentName.get(c.parentId.toString()) : undefined;
+      return [c._id.toString(), parent ? `${parent}${PATH_SEPARATOR}${c.name}` : c.name];
+    }),
+  );
   const poolById = new Map(pools.map((p) => [p._id.toString(), p.name]));
   const userById = new Map(users.map((u) => [u._id.toString(), u.displayName]));
 

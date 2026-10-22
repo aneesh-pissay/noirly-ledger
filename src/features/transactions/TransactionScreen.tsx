@@ -13,6 +13,7 @@ import { useUIStore } from "@/src/stores/ui-store";
 import type { Transaction } from "@/src/core/sync/types";
 import { RefundDialog } from "@/src/features/transactions/RefundDialog";
 import { CLEARING_LABEL } from "@/src/core/clearing";
+import { categoryTree } from "@/src/core/categories";
 
 type Props = {
   workspaceId: string;
@@ -73,8 +74,8 @@ export function TransactionScreen({
     overscan: 12,
   });
 
-  const categoryName = (id: string | null) =>
-    categories.data?.categories.find((c) => c.id === id)?.name ?? "Uncategorized";
+  const categoryLabels = new Map(categoryTree(categories.data?.categories ?? []).map((c) => [c.id, c.label]));
+  const categoryName = (id: string | null) => (id ? categoryLabels.get(id) : undefined) ?? "Uncategorized";
 
   return (
     <PageContainer size="lg">

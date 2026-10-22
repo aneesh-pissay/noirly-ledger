@@ -4,11 +4,13 @@ import { crossedThreshold } from "@/src/core/reports/format";
 import { withDb } from "@/src/server/db/mongodb";
 import {
   Budget,
+  Category,
   Transaction,
   WorkspaceMember,
 } from "@/src/server/models";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { SPEND_TYPES, spentSum } from "@/src/server/refunds";
+import { budgetCategoryIds } from "@/src/server/categories/tree";
 
 export async function maybeNotifyBudgetThreshold(input: {
   workspaceId: string;
@@ -19,9 +21,11 @@ export async function maybeNotifyBudgetThreshold(input: {
   if (!categoryId || input.addedExpenseMinor <= 0) return;
 
   await withDb(async () => {
+    // A budget on the parent covers its subcategories.
+    const category = await Category.findById(new Types.ObjectId(categoryId)).select("parentId").lean();
     const budgets = await Budget.find({
       workspaceId: new Types.ObjectId(input.workspaceId),
-      categoryId: new Types.ObjectId(categoryId),
+      categoryId: { $in: [new Types.ObjectId(categoryId), ...(category?.parentId ? [category.parentId] : [])] },
     });
     if (budgets.length === 0) return;
 
@@ -41,7 +45,7 @@ export async function maybeNotifyBudgetThreshold(input: {
         {
           $match: {
             workspaceId: new Types.ObjectId(input.workspaceId),
-            categoryId: new Types.ObjectId(categoryId),
+            categoryId: { $in: await budgetCategoryIds(budget.categoryId) },
             type: { $in: SPEND_TYPES },
             isPosted: true,
             deletedAt: null,
