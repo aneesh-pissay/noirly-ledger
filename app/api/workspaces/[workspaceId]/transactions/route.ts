@@ -1,6 +1,7 @@
 import { getLedgerProvider, jsonError, jsonOk, assertObjectId } from "@/src/server/api/http";
 import { createTransactionBodySchema } from "@/src/core/schemas/ledger";
 import { parseMajorToMinor } from "@/src/core/money";
+import type { TransactionType } from "@/src/core/models/enums";
 
 export async function GET(
   request: Request,
@@ -18,7 +19,7 @@ export async function GET(
       accountId: url.searchParams.get("accountId") ?? undefined,
       from: url.searchParams.get("from") ?? undefined,
       to: url.searchParams.get("to") ?? undefined,
-      type: (url.searchParams.get("type") as "expense" | "income" | "transfer") || undefined,
+      type: (url.searchParams.get("type") as TransactionType) || undefined,
       recurringOnly: url.searchParams.get("recurring") === "1",
       limit: url.searchParams.get("limit")
         ? Number.parseInt(url.searchParams.get("limit")!, 10)
@@ -47,6 +48,7 @@ export async function POST(
       categoryId: body.categoryId ?? null,
       accountId: body.accountId ?? null,
       toAccountId: body.toAccountId ?? null,
+      refundOfId: body.refundOfId ?? null,
       toAmountMinor: body.toAmountMajor ? parseMajorToMinor(body.toAmountMajor) : null,
       date: body.date,
       note: body.note ?? null,

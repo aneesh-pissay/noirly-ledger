@@ -69,6 +69,8 @@ import { publishMany } from "@/src/server/realtime/publish";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
 import { assertTransactionAccount, resolveTransfer } from "@/src/server/accounts";
+import { expenseToRefund, refundedByExpense, SPEND_TYPES, spentSum } from "@/src/server/refunds";
+import { spendSign } from "@/src/core/refunds";
 
 type ProviderContext = {
   userId: string;
@@ -79,6 +81,14 @@ function oid(id: string) {
     throw new ApiError(400, "invalid_request", "Invalid id");
   }
   return new Types.ObjectId(id);
+}
+
+/** Expenses with how much refunds have taken back so far. */
+async function withRefunded(items: Transaction[]) {
+  const expenses = items.filter((t) => t.type === "expense");
+  if (!expenses.length) return items;
+  const refunded = await refundedByExpense(expenses.map((t) => new Types.ObjectId(t.id)));
+  return items.map((t) => (refunded.has(t.id) ? { ...t, refundedMinor: refunded.get(t.id)! } : t));
 }
 
 function optionalOid(id: string | null | undefined) {
@@ -309,7 +319,7 @@ export function createMongoLedgerProvider(
         const page = extra ? docs.slice(0, limit) : docs;
         const last = page[page.length - 1];
         return {
-          items: page.map((doc) => mapTransaction(doc)),
+          items: await withRefunded(page.map((doc) => mapTransaction(doc))),
           nextCursor: extra && last ? encodeTransactionCursor(last) : undefined,
         };
       });
@@ -320,15 +330,25 @@ export function createMongoLedgerProvider(
         const doc = await TransactionModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
         await requireMembership(ctx.userId, doc.workspaceId.toString());
-        return mapTransaction(doc);
+        return (await withRefunded([mapTransaction(doc)]))[0]!;
       });
     },
 
     async createTransaction(input: CreateTransactionInput): Promise<Transaction> {
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
-        await assertCategory(workspace._id, input.categoryId);
-        await assertTransactionAccount(workspace._id, input.accountId, input.currency);
+        let refundOf: Awaited<ReturnType<typeof expenseToRefund>> | null = null;
+        if (input.type === "refund") {
+          refundOf = await expenseToRefund(workspace._id, input);
+          if (input.recurrence) throw new ApiError(400, "invalid_request", "A refund can't repeat");
+        } else if (input.refundOfId) {
+          throw new ApiError(400, "invalid_request", "Only a refund reverses an expense");
+        }
+        // A refund sits in its expense's category, and goes back to its account unless you pick another.
+        const categoryId = refundOf ? refundOf.categoryId?.toString() ?? null : input.categoryId;
+        const accountId = refundOf && !input.accountId ? refundOf.accountId?.toString() ?? null : input.accountId;
+        await assertCategory(workspace._id, categoryId);
+        await assertTransactionAccount(workspace._id, accountId, input.currency, refundOf?.accountId?.toString() ?? null);
         const transfer = await resolveTransfer(workspace._id, input);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
@@ -352,9 +372,10 @@ export function createMongoLedgerProvider(
           amountMinor: input.amountMinor,
           currency: input.currency,
           baseAmountMinor,
-          categoryId: optionalOid(input.categoryId),
-          accountId: optionalOid(input.accountId),
+          categoryId: optionalOid(categoryId),
+          accountId: optionalOid(accountId),
           ...transfer,
+          refundOfId: refundOf?._id ?? null,
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -387,6 +408,26 @@ export function createMongoLedgerProvider(
         // skip approval and leave the pool's total wrong.
         if (doc.budgetPoolId) {
           throw new ApiError(409, "pool_expense_locked", "Pool expenses can't be edited. Delete it and submit a new one.");
+        }
+        // Refunds are made from their expense, so the link between them stays put.
+        const changesType = Boolean(patch.type && patch.type !== doc.type);
+        if (changesType && (doc.type === "refund" || patch.type === "refund")) {
+          throw new ApiError(409, "refund_locked", doc.type === "refund" ? "A refund stays a refund. Delete it instead." : "Refund an expense from its row instead.");
+        }
+        if (doc.type === "refund" && patch.categoryId !== undefined && patch.categoryId !== (doc.categoryId?.toString() ?? null)) {
+          throw new ApiError(400, "invalid_request", "A refund keeps its expense's category");
+        }
+        if (doc.type === "expense") {
+          const refunded = (await refundedByExpense([doc._id])).get(String(doc._id)) ?? 0;
+          if (refunded && (changesType || (patch.currency && patch.currency.toUpperCase() !== doc.currency))) {
+            throw new ApiError(409, "has_refunds", "This expense has refunds. Delete them first.");
+          }
+          if (refunded && patch.amountMinor != null && patch.amountMinor < refunded) {
+            throw new ApiError(400, "invalid_request", "The expense can't be less than what's been refunded");
+          }
+        }
+        if (doc.type === "refund" && (patch.amountMinor != null || patch.currency)) {
+          await expenseToRefund(workspace._id, { refundOfId: doc.refundOfId?.toString(), amountMinor: patch.amountMinor ?? doc.amountMinor, currency: patch.currency ?? doc.currency }, doc._id);
         }
         if (patch.categoryId !== undefined) await assertCategory(workspace._id, patch.categoryId);
         if (patch.type) doc.type = patch.type;
@@ -439,7 +480,7 @@ export function createMongoLedgerProvider(
           asOf: doc.date,
         });
         await doc.save();
-        return mapTransaction(doc);
+        return (await withRefunded([mapTransaction(doc)]))[0]!;
       });
     },
 
@@ -448,6 +489,9 @@ export function createMongoLedgerProvider(
         const doc = await TransactionModel.findOne({ _id: oid(id), deletedAt: null });
         if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
         await requireTransactionEditor(ctx.userId, doc);
+        if (doc.type === "expense" && (await refundedByExpense([doc._id])).size) {
+          throw new ApiError(409, "has_refunds", "This expense has refunds. Delete them first.");
+        }
         if (doc.budgetPoolId && doc.approvalRequestId) {
           const approval = await ApprovalModel.findById(doc.approvalRequestId);
           if (approval?.status === "approved") {
@@ -993,9 +1037,11 @@ export function createMongoLedgerProvider(
           if (txn.type === "income") {
             incomeMinor += txn.baseAmountMinor;
             bucket.incomeMinor += txn.baseAmountMinor;
-          } else if (txn.type === "expense") {
-            expenseMinor += txn.baseAmountMinor;
-            bucket.expenseMinor += txn.baseAmountMinor;
+          } else if (spendSign(txn.type)) {
+            // Refunds take back from spending (and from the expense's category).
+            const spent = spendSign(txn.type) * txn.baseAmountMinor;
+            expenseMinor += spent;
+            bucket.expenseMinor += spent;
             const key = txn.categoryId?.toString() ?? "uncategorized";
             const category = txn.categoryId
               ? categoryById.get(txn.categoryId.toString())
@@ -1006,7 +1052,7 @@ export function createMongoLedgerProvider(
               color: category?.color ?? "#737373",
               amountMinor: 0,
             };
-            current.amountMinor += txn.baseAmountMinor;
+            current.amountMinor += spent;
             byCategoryMap.set(key, current);
           }
           overTimeMap.set(day, bucket);
@@ -1023,13 +1069,13 @@ export function createMongoLedgerProvider(
                 $match: {
                   workspaceId: workspace._id,
                   categoryId: budget.categoryId,
-                  type: "expense",
+                  type: { $in: SPEND_TYPES },
                   isPosted: true,
                   deletedAt: null,
                   date: { $gte: window.from, $lte: window.to },
                 },
               },
-              { $group: { _id: null, total: { $sum: "$baseAmountMinor" } } },
+              { $group: { _id: null, total: spentSum } },
             ]);
             const spentMinor = spent[0]?.total ?? 0;
             return {

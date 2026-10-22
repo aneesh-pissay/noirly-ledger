@@ -60,6 +60,13 @@ const transactionSchema = new Schema(
       index: true,
     },
     toAmountMinor: { type: Number, default: null },
+    // Refunds only: the expense this takes back (part or all of).
+    refundOfId: {
+      type: Schema.Types.ObjectId,
+      ref: "Transaction",
+      default: null,
+      index: true,
+    },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

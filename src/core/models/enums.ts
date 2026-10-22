@@ -7,7 +7,8 @@ export type MemberRole = (typeof MEMBER_ROLES)[number];
 export const BUDGET_PERIODS = ["weekly", "monthly", "custom"] as const;
 export type BudgetPeriod = (typeof BUDGET_PERIODS)[number];
 
-export const TRANSACTION_TYPES = ["expense", "income", "transfer"] as const;
+// A refund takes back part or all of one expense (refundOfId).
+export const TRANSACTION_TYPES = ["expense", "income", "transfer", "refund"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
 export const APPROVAL_STATUSES = [

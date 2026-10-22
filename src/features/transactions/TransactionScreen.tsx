@@ -2,7 +2,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/src/lib/api-client";
@@ -10,6 +10,8 @@ import { qk } from "@/src/core/sync/query-keys";
 import { MoneyText } from "@/src/components/MoneyText";
 import { Button, PageContainer } from "@noirly-dev/ui";
 import { useUIStore } from "@/src/stores/ui-store";
+import type { Transaction } from "@/src/core/sync/types";
+import { RefundDialog } from "@/src/features/transactions/RefundDialog";
 
 type Props = {
   workspaceId: string;
@@ -44,6 +46,7 @@ export function TransactionScreen({
     id ? accounts.data?.accounts.find((a) => a.id === id)?.name ?? "Account" : "—";
   const filtered = accountFilter ? accounts.data?.accounts.find((a) => a.id === accountFilter) : undefined;
 
+  const [refunding, setRefunding] = useState<Transaction | null>(null);
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteTransaction(id),
     onSuccess: () =>
@@ -83,9 +86,15 @@ export function TransactionScreen({
         </div>
         <Button onClick={() => setOpen(true)}>Add</Button>
       </div>
+      {remove.error ? (
+        <p role="alert" className="mt-3 text-sm text-[var(--balance-negative)]">
+          {remove.error instanceof Error ? remove.error.message : "Couldn't delete"}
+        </p>
+      ) : null}
+      <RefundDialog workspaceId={workspaceId} expense={refunding} onClose={() => setRefunding(null)} />
 
       <div className="mt-6 overflow-hidden rounded-xl border border-[var(--hairline)]">
-        <div className="grid grid-cols-[7rem_1fr_1fr_1fr_6rem_8rem_4rem] border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        <div className="grid grid-cols-[7rem_1fr_1fr_1fr_7rem_8rem_7rem] border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
           <span>Date</span>
           <span>Category</span>
           <span>Account</span>
@@ -109,10 +118,11 @@ export function TransactionScreen({
                 // Viewing the account a transfer went into: show what arrived there.
                 const received = Boolean(accountFilter && txn.toAccountId === accountFilter);
                 const toAccount = txn.toAccountId ? accounts.data?.accounts.find((a) => a.id === txn.toAccountId) : undefined;
+                const refundable = txn.type === "expense" && txn.isPosted && !txn.budgetPoolId && txn.refundedMinor < txn.amountMinor;
                 return (
                   <div
                     key={txn.id}
-                    className="absolute left-0 grid w-full grid-cols-[7rem_1fr_1fr_1fr_6rem_8rem_4rem] items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
+                    className="absolute left-0 grid w-full grid-cols-[7rem_1fr_1fr_1fr_7rem_8rem_7rem] items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -126,7 +136,11 @@ export function TransactionScreen({
                       {txn.toAccountId ? `${accountName(txn.accountId)} → ${accountName(txn.toAccountId)}` : accountName(txn.accountId)}
                     </span>
                     <span className="truncate text-[var(--muted-foreground)]">{txn.note ?? "—"}</span>
-                    <span className="capitalize text-[var(--muted-foreground)]">{txn.type}</span>
+                    <span className="text-[var(--muted-foreground)]">
+                      {txn.type === "expense" && txn.refundedMinor
+                        ? txn.refundedMinor >= txn.amountMinor ? "Refunded" : "Part refunded"
+                        : txn.type.charAt(0).toUpperCase() + txn.type.slice(1)}
+                    </span>
                     <span className="text-right">
                       <MoneyText
                         amountMinor={
@@ -134,7 +148,7 @@ export function TransactionScreen({
                         }
                         currency={received ? toAccount?.currency ?? txn.currency : txn.currency}
                         tone={
-                          txn.type === "income"
+                          txn.type === "income" || txn.type === "refund"
                             ? "positive"
                             : txn.type === "expense"
                               ? "negative"
@@ -142,7 +156,16 @@ export function TransactionScreen({
                         }
                       />
                     </span>
-                    <span className="text-right">
+                    <span className="flex justify-end gap-3">
+                      {refundable ? (
+                        <button
+                          type="button"
+                          className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                          onClick={() => setRefunding(txn)}
+                        >
+                          Refund
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="text-xs text-[var(--muted-foreground)] hover:text-[var(--balance-negative)]"

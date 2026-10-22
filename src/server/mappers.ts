@@ -75,6 +75,9 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     accountId: doc.accountId ? doc.accountId.toString() : null,
     toAccountId: doc.toAccountId ? doc.toAccountId.toString() : null,
     toAmountMinor: doc.toAmountMinor ?? null,
+    refundOfId: doc.refundOfId ? doc.refundOfId.toString() : null,
+    // Filled in where it's listed; see withRefunded.
+    refundedMinor: 0,
     date: isoDay(doc.date)!,
     note: doc.note ?? null,
     // Built from the key, not the stored URL: older rows hold public R2 links.

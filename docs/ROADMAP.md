@@ -16,7 +16,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 
 | Phase | Done |
 | --- | --- |
-| 1. Accounts and the money model | 2 / 10 |
+| 1. Accounts and the money model | 3 / 10 |
 | 2. Budgeting | 0 / 9 |
 | 3. Transactions and imports | 0 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
@@ -54,7 +54,7 @@ _Everything after this builds on accounts. Today a transaction belongs to a work
 
 - [x] Accounts: cash, bank, wallet, credit card and loan, with opening balance and currency (L) — done 2026-10-22
 - [x] Account-to-account transfers that move money between accounts (M) — done 2026-10-22
-- [ ] Refund entries, linked to the expense they reverse (S)
+- [x] Refund entries, linked to the expense they reverse (S) — done 2026-10-22
 - [ ] Pending, cleared and reconciled statuses (S)
 - [ ] Assets, liabilities and net worth (needs accounts) (M)
 - [ ] Available-to-spend and projected balances (upcoming recurring included) (M)

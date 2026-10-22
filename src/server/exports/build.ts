@@ -14,6 +14,8 @@ import {
   type CsvTransactionRow,
 } from "@/src/server/exports/csv";
 import { renderSummaryPdf, type PdfSummary } from "@/src/server/exports/pdf";
+import { spendSign } from "@/src/core/refunds";
+import type { TransactionType } from "@/src/core/models/enums";
 
 export type ExportQuery = {
   workspaceId: string;
@@ -94,20 +96,19 @@ export async function buildPdfExport(
     const incomeMinor = rows
       .filter((r) => r.type === "income")
       .reduce((sum, r) => sum + r.baseAmountMinor, 0);
-    const expenseMinor = rows
-      .filter((r) => r.type === "expense")
-      .reduce((sum, r) => sum + r.baseAmountMinor, 0);
+    // Spending is net of refunds.
+    const expenseMinor = rows.reduce((sum, r) => sum + spendSign(r.type as TransactionType) * r.baseAmountMinor, 0);
 
     const byLabel = new Map<string, number>();
     for (const row of rows) {
-      if (row.type !== "expense") continue;
+      if (!spendSign(row.type as TransactionType)) continue;
       const label =
         query.template === "pool"
           ? row.pool || "Pool"
           : query.template === "approvals"
             ? row.status
             : row.category || "Uncategorized";
-      byLabel.set(label, (byLabel.get(label) ?? 0) + row.baseAmountMinor);
+      byLabel.set(label, (byLabel.get(label) ?? 0) + spendSign(row.type as TransactionType) * row.baseAmountMinor);
     }
 
     if (query.template === "pool" && query.budgetPoolId) {

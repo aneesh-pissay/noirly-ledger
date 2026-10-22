@@ -27,7 +27,7 @@ export type BalanceEntry = { type: TransactionType | "transfer_in" | "transfer_o
 /**
  * An account's balance in its own currency: what's in it for cash, bank and
  * wallet accounts, what's owed for cards and loans. Money in (income, a
- * transfer in) raises what you have and lowers what you owe: paying a card
+ * refund, a transfer in) raises what you have and lowers what you owe: paying a card
  * from the bank is a transfer into the card. Money out does the opposite: a
  * cash withdrawal on a card is a transfer out that adds to what's owed.
  * An old-style transfer without accounts on both sides moves nothing.
@@ -36,7 +36,7 @@ export function accountBalance(kind: AccountKind, openingMinor: number, entries:
   const sign = isLiability(kind) ? -1 : 1;
   let balance = openingMinor;
   for (const entry of entries) {
-    if (entry.type === "income" || entry.type === "transfer_in") balance += sign * entry.amountMinor;
+    if (entry.type === "income" || entry.type === "refund" || entry.type === "transfer_in") balance += sign * entry.amountMinor;
     else if (entry.type === "expense" || entry.type === "transfer_out") balance -= sign * entry.amountMinor;
   }
   return balance;

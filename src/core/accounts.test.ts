@@ -27,6 +27,11 @@ describe("accountBalance", () => {
     expect(accountBalance("wallet", 0, [{ type: "transfer_in", amountMinor: 200 }])).toBe(200);
   });
 
+  it("puts refunds back where the money came from", () => {
+    expect(accountBalance("bank", 1_000, [{ type: "expense", amountMinor: 400 }, { type: "refund", amountMinor: 150 }])).toBe(750);
+    expect(accountBalance("credit_card", 0, [{ type: "expense", amountMinor: 400 }, { type: "refund", amountMinor: 150 }])).toBe(250);
+  });
+
   it("knows which kinds are liabilities", () => {
     expect(isLiability("loan")).toBe(true);
     expect(isLiability("wallet")).toBe(false);

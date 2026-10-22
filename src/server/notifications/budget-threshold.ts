@@ -8,6 +8,7 @@ import {
   WorkspaceMember,
 } from "@/src/server/models";
 import { notifyUsers } from "@/src/server/notifications/notify";
+import { SPEND_TYPES, spentSum } from "@/src/server/refunds";
 
 export async function maybeNotifyBudgetThreshold(input: {
   workspaceId: string;
@@ -41,13 +42,13 @@ export async function maybeNotifyBudgetThreshold(input: {
           $match: {
             workspaceId: new Types.ObjectId(input.workspaceId),
             categoryId: new Types.ObjectId(categoryId),
-            type: "expense",
+            type: { $in: SPEND_TYPES },
             isPosted: true,
             deletedAt: null,
             date: { $gte: window.from, $lte: window.to },
           },
         },
-        { $group: { _id: null, total: { $sum: "$baseAmountMinor" } } },
+        { $group: { _id: null, total: spentSum } },
       ]);
       const nextSpent = spent[0]?.total ?? 0;
       const previous = nextSpent - input.addedExpenseMinor;

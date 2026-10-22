@@ -74,6 +74,10 @@ export type Transaction = {
   /** Transfers: the account the money went to, and the amount it received in that account's currency. */
   toAccountId: string | null;
   toAmountMinor: MoneyMinor | null;
+  /** Refunds: the expense this takes back. */
+  refundOfId: string | null;
+  /** Expenses: how much refunds have taken back so far, in its currency. */
+  refundedMinor: MoneyMinor;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -261,6 +265,7 @@ export type CreateTransactionInput = {
   accountId?: string | null;
   toAccountId?: string | null;
   toAmountMinor?: number | null;
+  refundOfId?: string | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;
