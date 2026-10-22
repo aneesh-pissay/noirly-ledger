@@ -1,5 +1,6 @@
 export type TxFilters = {
   categoryId?: string;
+  accountId?: string;
   budgetPoolId?: string;
   from?: string;
   to?: string;
@@ -20,6 +21,7 @@ export const qk = {
   approvals: (workspaceId: string, status = "all") =>
     ["approvals", workspaceId, status] as const,
   savingsGoals: (workspaceId: string) => ["savings-goals", workspaceId] as const,
+  accounts: (workspaceId: string) => ["accounts", workspaceId] as const,
   fxRates: (workspaceId: string) => ["fx-rates", workspaceId] as const,
   dashboard: (workspaceId: string, range: string) =>
     ["dashboard", workspaceId, range] as const,

@@ -9,6 +9,7 @@ import {
   Goal,
   LayoutDashboard,
   Plus,
+  Landmark,
   Receipt,
   Repeat,
   Settings,
@@ -114,6 +115,7 @@ export function AppShell({ user, workspaces, children }: Props) {
         label: "Money",
         items: [
           { href: "/transactions", label: "Transactions", icon: Receipt },
+          { href: "/accounts", label: "Accounts", icon: Landmark },
           { href: "/budgets", label: "Budgets", icon: Wallet },
           { href: "/recurring", label: "Recurring", icon: Repeat },
         ],

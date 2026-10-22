@@ -4,6 +4,7 @@ import {
   RECURRENCE_FREQUENCIES,
   TRANSACTION_TYPES,
 } from "@/src/core/models/enums";
+import { ACCOUNT_KINDS } from "@/src/core/accounts";
 
 export const currencyCode = z
   .string()
@@ -27,6 +28,7 @@ export const createTransactionBodySchema = z.object({
   amountMajor: amountMajorSchema,
   currency: currencyCode,
   categoryId: z.string().min(1).nullable().optional(),
+  accountId: z.string().min(1).nullable().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().max(2000).nullable().optional(),
   /** Accepted for older clients but ignored: the server builds it from the key. */
@@ -40,6 +42,26 @@ export const updateTransactionBodySchema = createTransactionBodySchema
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",
   });
+
+/** A balance can be below zero (an overdrawn account, a card in credit). */
+export const signedAmountMajorSchema = z
+  .string()
+  .trim()
+  .regex(/^-?\d+(\.\d{1,2})?$/, "Enter a valid amount");
+
+export const createAccountBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  kind: z.enum(ACCOUNT_KINDS),
+  currency: currencyCode,
+  openingMajor: signedAmountMajorSchema.default("0"),
+  openingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  institution: z.string().trim().max(80).nullable().optional(),
+});
+
+export const updateAccountBodySchema = createAccountBodySchema
+  .partial()
+  .extend({ archived: z.boolean().optional() })
+  .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
 
 export const createCategoryBodySchema = z.object({
   name: z.string().trim().min(1).max(80),

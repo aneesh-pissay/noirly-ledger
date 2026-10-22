@@ -31,6 +31,7 @@ export async function PATCH(
       amountMinor: body.amountMajor ? parseMajorToMinor(body.amountMajor) : undefined,
       currency: body.currency,
       categoryId: body.categoryId,
+      accountId: body.accountId,
       date: body.date,
       note: body.note,
       receiptUrl: body.receiptUrl,

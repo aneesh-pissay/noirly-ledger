@@ -1,4 +1,5 @@
 import type {
+  Account,
   ApprovalRequest,
   ApprovalView,
   Budget,
@@ -80,6 +81,7 @@ export const api = {
     query: {
       cursor?: string;
       categoryId?: string;
+      accountId?: string;
       from?: string;
       to?: string;
       type?: TransactionType;
@@ -90,6 +92,7 @@ export const api = {
     const params = new URLSearchParams();
     if (query.cursor) params.set("cursor", query.cursor);
     if (query.categoryId) params.set("categoryId", query.categoryId);
+    if (query.accountId) params.set("accountId", query.accountId);
     if (query.from) params.set("from", query.from);
     if (query.to) params.set("to", query.to);
     if (query.type) params.set("type", query.type);
@@ -129,6 +132,18 @@ export const api = {
     return request<{ ok: boolean }>(`/api/budgets/${budgetId}`, {
       method: "DELETE",
     });
+  },
+  listAccounts(workspaceId: string) {
+    return request<{ accounts: Account[] }>(`/api/workspaces/${workspaceId}/accounts`);
+  },
+  createAccount(workspaceId: string, body: { name: string; kind: Account["kind"]; currency: string; openingMajor: string; openingDate: string; institution?: string | null }) {
+    return request<{ account: Account }>(`/api/workspaces/${workspaceId}/accounts`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateAccount(accountId: string, body: { name?: string; archived?: boolean; openingMajor?: string; institution?: string | null }) {
+    return request<{ account: Account }>(`/api/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteAccount(accountId: string) {
+    return request<{ ok: boolean }>(`/api/accounts/${accountId}`, { method: "DELETE" });
   },
   listGoals(workspaceId: string) {
     return request<{ goals: SavingsGoal[] }>(

@@ -14,6 +14,7 @@ export {
   type ApprovalRequestDocument,
 } from "./ApprovalRequest";
 export { FxRate, type FxRateDocument } from "./FxRate";
+export { Account, type AccountDocument } from "./Account";
 export {
   WorkspaceInvite,
   type WorkspaceInviteDocument,

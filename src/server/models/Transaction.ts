@@ -45,6 +45,13 @@ const transactionSchema = new Schema(
       default: null,
       index: true,
     },
+    // The account the money went in or out of, if one was chosen; same currency as the account.
+    accountId: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      default: null,
+      index: true,
+    },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

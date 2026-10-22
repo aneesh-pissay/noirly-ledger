@@ -75,6 +75,7 @@ export async function runRecurringEngine(asOf = new Date()): Promise<{ created: 
               currency: template.currency,
               baseAmountMinor,
               categoryId: template.categoryId,
+              accountId: template.accountId ?? null,
               budgetPoolId: null,
               date: stamp,
               note: template.note,

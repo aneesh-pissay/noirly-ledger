@@ -7,6 +7,7 @@ import type {
   WorkspaceKind,
 } from "@/src/core/models/enums";
 import type { MoneyMinor } from "@/src/core/money";
+import type { AccountKind } from "@/src/core/accounts";
 
 export type {
   ApprovalStatus,
@@ -68,6 +69,8 @@ export type Transaction = {
   baseAmountMinor: MoneyMinor;
   categoryId: string | null;
   budgetPoolId: string | null;
+  /** The account it was paid from or into, if any. */
+  accountId: string | null;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -81,6 +84,21 @@ export type Transaction = {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+};
+
+/** Where money is kept or owed. balanceMinor is what's in it, or for cards and loans what's owed, in its currency. */
+export type Account = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  kind: AccountKind;
+  currency: string;
+  openingBalanceMinor: MoneyMinor;
+  openingDate: string;
+  institution: string | null;
+  archived: boolean;
+  balanceMinor: MoneyMinor;
+  transactionCount: number;
 };
 
 export type Budget = {
@@ -224,6 +242,7 @@ export type ListTransactionsQuery = {
   limit?: number;
   categoryId?: string;
   budgetPoolId?: string;
+  accountId?: string;
   from?: string;
   to?: string;
   recurringOnly?: boolean;
@@ -236,6 +255,7 @@ export type CreateTransactionInput = {
   amountMinor: number;
   currency: string;
   categoryId?: string | null;
+  accountId?: string | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;

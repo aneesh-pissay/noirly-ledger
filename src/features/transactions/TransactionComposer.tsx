@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "@/src/lib/api-client";
@@ -18,6 +18,7 @@ type FormValues = {
   amountMajor: string;
   currency: string;
   categoryId: string;
+  accountId: string;
   date: string;
   note: string;
   frequency: "" | "daily" | "weekly" | "monthly" | "yearly";
@@ -41,12 +42,20 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
     enabled: open,
   });
 
+  const accounts = useQuery({
+    queryKey: qk.accounts(workspaceId),
+    queryFn: () => api.listAccounts(workspaceId),
+    enabled: open,
+  });
+  const openAccounts = (accounts.data?.accounts ?? []).filter((account) => !account.archived);
+
   const form = useForm<FormValues>({
     defaultValues: {
       type: "expense",
       amountMajor: "",
       currency: baseCurrency,
       categoryId: "",
+      accountId: "",
       date: isoDate(new Date()),
       note: "",
       frequency: "",
@@ -58,8 +67,10 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
       const parsed = createTransactionBodySchema.safeParse({
         type: values.type,
         amountMajor: values.amountMajor,
-        currency: values.currency,
+        // The currency select is locked (and left out of the values) while an account is chosen.
+        currency: openAccounts.find((account) => account.id === values.accountId)?.currency ?? values.currency,
         categoryId: values.categoryId || null,
+        accountId: values.accountId || null,
         date: values.date,
         note: values.note || null,
         receiptUrl: receipt?.url ?? null,
@@ -78,12 +89,14 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         queryClient.invalidateQueries({ queryKey: qk.transactions(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: ["dashboard", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: qk.budgets(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
       ]);
       form.reset({
         type: "expense",
         amountMajor: "",
         currency: baseCurrency,
         categoryId: "",
+        accountId: form.getValues("accountId"),
         date: isoDate(new Date()),
         note: "",
         frequency: "",
@@ -93,6 +106,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
     },
     onError: (err) => setError(err instanceof Error ? err.message : "Failed"),
   });
+
+  const accountId = useWatch({ control: form.control, name: "accountId" });
+  const chosenAccount = openAccounts.find((account) => account.id === accountId);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -137,7 +153,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label htmlFor="currency">Currency</Label>
-            <Select id="currency" {...form.register("currency")}>
+            {/* An account's transactions are in its currency. */}
+            <Select id="currency" disabled={Boolean(chosenAccount)} {...form.register("currency")}>
               {COMMON_CURRENCIES.map((code) => (
                 <option key={code} value={code}>
                   {code}
@@ -150,6 +167,22 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             <Input id="date" type="date" className="font-mono" {...form.register("date")} />
           </div>
         </div>
+        {openAccounts.length ? (
+          <div>
+            <Label htmlFor="account">Account</Label>
+            <Select id="account" {...form.register("accountId", {
+              onChange: (event) => {
+                const account = openAccounts.find((a) => a.id === event.target.value);
+                if (account) form.setValue("currency", account.currency);
+              },
+            })}>
+              <option value="">No account</option>
+              {openAccounts.map((account) => (
+                <option key={account.id} value={account.id}>{account.name} ({account.currency})</option>
+              ))}
+            </Select>
+          </div>
+        ) : null}
         <div>
           <Label htmlFor="category">Category</Label>
           <Select id="category" {...form.register("categoryId")}>

@@ -68,6 +68,7 @@ import { receiptUrlFor, receiptWorkspaceId } from "@/src/server/storage/receipt-
 import { publishMany } from "@/src/server/realtime/publish";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
+import { assertTransactionAccount } from "@/src/server/accounts";
 
 type ProviderContext = {
   userId: string;
@@ -274,6 +275,7 @@ export function createMongoLedgerProvider(
         };
         if (query.categoryId) filter.categoryId = oid(query.categoryId);
         if (query.budgetPoolId) filter.budgetPoolId = oid(query.budgetPoolId);
+        if (query.accountId) filter.accountId = oid(query.accountId);
         if (query.type) filter.type = query.type;
         if (query.recurringOnly) {
           filter.isRecurring = true;
@@ -325,6 +327,7 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
         await assertCategory(workspace._id, input.categoryId);
+        await assertTransactionAccount(workspace._id, input.accountId, input.currency);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
         const baseAmountMinor = await toBaseAmount({
@@ -348,6 +351,7 @@ export function createMongoLedgerProvider(
           currency: input.currency,
           baseAmountMinor,
           categoryId: optionalOid(input.categoryId),
+          accountId: optionalOid(input.accountId),
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -386,6 +390,11 @@ export function createMongoLedgerProvider(
         if (patch.amountMinor != null) doc.amountMinor = patch.amountMinor;
         if (patch.currency) doc.currency = patch.currency;
         if (patch.categoryId !== undefined) doc.categoryId = optionalOid(patch.categoryId);
+        if (patch.accountId !== undefined || (patch.currency && doc.accountId)) {
+          const accountId = patch.accountId !== undefined ? patch.accountId : doc.accountId?.toString() ?? null;
+          await assertTransactionAccount(workspace._id, accountId, patch.currency ?? doc.currency, doc.accountId?.toString() ?? null);
+          doc.accountId = optionalOid(accountId);
+        }
         if (patch.date) doc.date = new Date(`${patch.date}T12:00:00.000Z`);
         if (patch.note !== undefined) doc.note = patch.note;
         if (patch.receiptStorageKey !== undefined) {
