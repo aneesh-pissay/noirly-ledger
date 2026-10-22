@@ -106,6 +106,9 @@ export function TransactionScreen({
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
                 const txn = items[virtualRow.index]!;
+                // Viewing the account a transfer went into: show what arrived there.
+                const received = Boolean(accountFilter && txn.toAccountId === accountFilter);
+                const toAccount = txn.toAccountId ? accounts.data?.accounts.find((a) => a.id === txn.toAccountId) : undefined;
                 return (
                   <div
                     key={txn.id}
@@ -119,15 +122,17 @@ export function TransactionScreen({
                       {txn.date}
                     </span>
                     <span>{categoryName(txn.categoryId)}</span>
-                    <span className="truncate text-[var(--muted-foreground)]">{accountName(txn.accountId)}</span>
+                    <span className="truncate text-[var(--muted-foreground)]">
+                      {txn.toAccountId ? `${accountName(txn.accountId)} → ${accountName(txn.toAccountId)}` : accountName(txn.accountId)}
+                    </span>
                     <span className="truncate text-[var(--muted-foreground)]">{txn.note ?? "—"}</span>
                     <span className="capitalize text-[var(--muted-foreground)]">{txn.type}</span>
                     <span className="text-right">
                       <MoneyText
                         amountMinor={
-                          txn.type === "expense" ? -txn.amountMinor : txn.amountMinor
+                          received ? txn.toAmountMinor ?? txn.amountMinor : txn.type === "expense" ? -txn.amountMinor : txn.amountMinor
                         }
-                        currency={txn.currency}
+                        currency={received ? toAccount?.currency ?? txn.currency : txn.currency}
                         tone={
                           txn.type === "income"
                             ? "positive"

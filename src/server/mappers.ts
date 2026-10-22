@@ -73,6 +73,8 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     categoryId: doc.categoryId ? doc.categoryId.toString() : null,
     budgetPoolId: doc.budgetPoolId ? doc.budgetPoolId.toString() : null,
     accountId: doc.accountId ? doc.accountId.toString() : null,
+    toAccountId: doc.toAccountId ? doc.toAccountId.toString() : null,
+    toAmountMinor: doc.toAmountMinor ?? null,
     date: isoDay(doc.date)!,
     note: doc.note ?? null,
     // Built from the key, not the stored URL: older rows hold public R2 links.

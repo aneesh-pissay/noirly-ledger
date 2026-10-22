@@ -32,6 +32,8 @@ export async function PATCH(
       currency: body.currency,
       categoryId: body.categoryId,
       accountId: body.accountId,
+      toAccountId: body.toAccountId,
+      toAmountMinor: body.toAmountMajor === undefined ? undefined : body.toAmountMajor === null ? null : parseMajorToMinor(body.toAmountMajor),
       date: body.date,
       note: body.note,
       receiptUrl: body.receiptUrl,

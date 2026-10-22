@@ -68,7 +68,7 @@ import { receiptUrlFor, receiptWorkspaceId } from "@/src/server/storage/receipt-
 import { publishMany } from "@/src/server/realtime/publish";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
-import { assertTransactionAccount } from "@/src/server/accounts";
+import { assertTransactionAccount, resolveTransfer } from "@/src/server/accounts";
 
 type ProviderContext = {
   userId: string;
@@ -275,7 +275,8 @@ export function createMongoLedgerProvider(
         };
         if (query.categoryId) filter.categoryId = oid(query.categoryId);
         if (query.budgetPoolId) filter.budgetPoolId = oid(query.budgetPoolId);
-        if (query.accountId) filter.accountId = oid(query.accountId);
+        // An account's transactions include transfers into it.
+        if (query.accountId) filter.$or = [{ accountId: oid(query.accountId) }, { toAccountId: oid(query.accountId) }];
         if (query.type) filter.type = query.type;
         if (query.recurringOnly) {
           filter.isRecurring = true;
@@ -328,6 +329,7 @@ export function createMongoLedgerProvider(
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
         await assertCategory(workspace._id, input.categoryId);
         await assertTransactionAccount(workspace._id, input.accountId, input.currency);
+        const transfer = await resolveTransfer(workspace._id, input);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
         const baseAmountMinor = await toBaseAmount({
@@ -352,6 +354,7 @@ export function createMongoLedgerProvider(
           baseAmountMinor,
           categoryId: optionalOid(input.categoryId),
           accountId: optionalOid(input.accountId),
+          ...transfer,
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -394,6 +397,20 @@ export function createMongoLedgerProvider(
           const accountId = patch.accountId !== undefined ? patch.accountId : doc.accountId?.toString() ?? null;
           await assertTransactionAccount(workspace._id, accountId, patch.currency ?? doc.currency, doc.accountId?.toString() ?? null);
           doc.accountId = optionalOid(accountId);
+        }
+        if (doc.type === "transfer" || doc.toAccountId || patch.toAccountId) {
+          const transfer = await resolveTransfer(workspace._id, {
+            type: doc.type,
+            accountId: doc.accountId?.toString() ?? null,
+            currency: doc.currency,
+            amountMinor: doc.amountMinor,
+            // Changing a transfer to spending or income drops its "to" side.
+            toAccountId: doc.type === "transfer" && patch.toAccountId === undefined ? doc.toAccountId?.toString() ?? null : patch.toAccountId ?? null,
+            toAmountMinor: patch.toAmountMinor,
+            previousToAmountMinor: doc.toAmountMinor,
+          }, doc.toAccountId?.toString() ?? null);
+          doc.toAccountId = transfer.toAccountId;
+          doc.toAmountMinor = transfer.toAmountMinor;
         }
         if (patch.date) doc.date = new Date(`${patch.date}T12:00:00.000Z`);
         if (patch.note !== undefined) doc.note = patch.note;

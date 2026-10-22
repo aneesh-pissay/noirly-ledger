@@ -19,6 +19,8 @@ type FormValues = {
   currency: string;
   categoryId: string;
   accountId: string;
+  toAccountId: string;
+  toAmountMajor: string;
   date: string;
   note: string;
   frequency: "" | "daily" | "weekly" | "monthly" | "yearly";
@@ -56,6 +58,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
       currency: baseCurrency,
       categoryId: "",
       accountId: "",
+      toAccountId: "",
+      toAmountMajor: "",
       date: isoDate(new Date()),
       note: "",
       frequency: "",
@@ -64,13 +68,19 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      const transfer = values.type === "transfer";
+      const from = openAccounts.find((account) => account.id === values.accountId);
+      const to = transfer ? openAccounts.find((account) => account.id === values.toAccountId) : undefined;
       const parsed = createTransactionBodySchema.safeParse({
         type: values.type,
         amountMajor: values.amountMajor,
         // The currency select is locked (and left out of the values) while an account is chosen.
         currency: openAccounts.find((account) => account.id === values.accountId)?.currency ?? values.currency,
-        categoryId: values.categoryId || null,
+        // A transfer moves money between your accounts; it isn't spending in a category.
+        categoryId: transfer ? null : values.categoryId || null,
         accountId: values.accountId || null,
+        toAccountId: to?.id ?? null,
+        toAmountMajor: to && from && to.currency !== from.currency ? values.toAmountMajor : null,
         date: values.date,
         note: values.note || null,
         receiptUrl: receipt?.url ?? null,
@@ -97,6 +107,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         currency: baseCurrency,
         categoryId: "",
         accountId: form.getValues("accountId"),
+        toAccountId: "",
+        toAmountMajor: "",
         date: isoDate(new Date()),
         note: "",
         frequency: "",
@@ -109,6 +121,10 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
 
   const accountId = useWatch({ control: form.control, name: "accountId" });
   const chosenAccount = openAccounts.find((account) => account.id === accountId);
+  const isTransfer = useWatch({ control: form.control, name: "type" }) === "transfer";
+  const toAccountId = useWatch({ control: form.control, name: "toAccountId" });
+  const toAccount = openAccounts.find((account) => account.id === toAccountId);
+  const crossCurrency = Boolean(isTransfer && chosenAccount && toAccount && chosenAccount.currency !== toAccount.currency);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -168,8 +184,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
           </div>
         </div>
         {openAccounts.length ? (
+          <div className={isTransfer ? "grid grid-cols-2 gap-3" : undefined}>
           <div>
-            <Label htmlFor="account">Account</Label>
+            <Label htmlFor="account">{isTransfer ? "From" : "Account"}</Label>
             <Select id="account" {...form.register("accountId", {
               onChange: (event) => {
                 const account = openAccounts.find((a) => a.id === event.target.value);
@@ -182,8 +199,26 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
               ))}
             </Select>
           </div>
+          {isTransfer ? (
+            <div>
+              <Label htmlFor="to-account">To</Label>
+              <Select id="to-account" {...form.register("toAccountId")}>
+                <option value="">Choose an account</option>
+                {openAccounts.filter((account) => account.id !== accountId).map((account) => (
+                  <option key={account.id} value={account.id}>{account.name} ({account.currency})</option>
+                ))}
+              </Select>
+            </div>
+          ) : null}
+          </div>
         ) : null}
-        <div>
+        {crossCurrency ? (
+          <div>
+            <Label htmlFor="to-amount">Amount received ({toAccount!.currency})</Label>
+            <Input id="to-amount" inputMode="decimal" className="font-mono tabular-nums" placeholder="0.00" {...form.register("toAmountMajor")} />
+          </div>
+        ) : null}
+        {isTransfer ? null : <div>
           <Label htmlFor="category">Category</Label>
           <Select id="category" {...form.register("categoryId")}>
             <option value="">Uncategorized</option>
@@ -193,7 +228,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
               </option>
             ))}
           </Select>
-        </div>
+        </div>}
         <div>
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" {...form.register("note")} />

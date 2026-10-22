@@ -29,6 +29,9 @@ export const createTransactionBodySchema = z.object({
   currency: currencyCode,
   categoryId: z.string().min(1).nullable().optional(),
   accountId: z.string().min(1).nullable().optional(),
+  /** Transfers: where the money went, and what arrived when that account's currency differs. */
+  toAccountId: z.string().min(1).nullable().optional(),
+  toAmountMajor: amountMajorSchema.nullable().optional(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   note: z.string().trim().max(2000).nullable().optional(),
   /** Accepted for older clients but ignored: the server builds it from the key. */

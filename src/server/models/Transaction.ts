@@ -52,6 +52,14 @@ const transactionSchema = new Schema(
       default: null,
       index: true,
     },
+    // Transfers only: the account the money went to, and what it received in that account's currency.
+    toAccountId: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      default: null,
+      index: true,
+    },
+    toAmountMinor: { type: Number, default: null },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

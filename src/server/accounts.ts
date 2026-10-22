@@ -3,7 +3,7 @@ import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
 import { Account as AccountModel, Transaction as TransactionModel, type AccountDocument } from "@/src/server/models";
 import { requireAction, requireMembershipRole } from "@/src/server/workspace/members";
-import { accountBalance, type AccountKind } from "@/src/core/accounts";
+import { accountBalance, checkTransfer, type AccountKind, type BalanceEntry } from "@/src/core/accounts";
 import type { TransactionType } from "@/src/core/models/enums";
 import type { Account } from "@/src/core/sync/types";
 
@@ -29,25 +29,40 @@ function day(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-/** Posted, live transactions per account, summed by type. */
+type Totals = { entries: BalanceEntry[]; count: number };
+
+/** Posted, live transactions per account, summed by type; a transfer counts out of one account and into the other. */
 async function totals(accountIds: Types.ObjectId[]) {
-  if (!accountIds.length) return new Map<string, { entries: Array<{ type: TransactionType; amountMinor: number }>; count: number }>();
-  const rows = await TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType }; amountMinor: number; count: number }>([
-    { $match: { accountId: { $in: accountIds }, deletedAt: null, isPosted: true } },
-    { $group: { _id: { accountId: "$accountId", type: "$type" }, amountMinor: { $sum: "$amountMinor" }, count: { $sum: 1 } } },
+  const byAccount = new Map<string, Totals>();
+  if (!accountIds.length) return byAccount;
+  const live = { deletedAt: null, isPosted: true };
+  const [out, incoming] = await Promise.all([
+    TransactionModel.aggregate<{ _id: { accountId: Types.ObjectId; type: TransactionType }; amountMinor: number; count: number }>([
+      { $match: { accountId: { $in: accountIds }, ...live } },
+      { $group: { _id: { accountId: "$accountId", type: "$type" }, amountMinor: { $sum: "$amountMinor" }, count: { $sum: 1 } } },
+    ]),
+    TransactionModel.aggregate<{ _id: Types.ObjectId; amountMinor: number; count: number }>([
+      { $match: { toAccountId: { $in: accountIds }, type: "transfer", ...live } },
+      { $group: { _id: "$toAccountId", amountMinor: { $sum: "$toAmountMinor" }, count: { $sum: 1 } } },
+    ]),
   ]);
-  const byAccount = new Map<string, { entries: Array<{ type: TransactionType; amountMinor: number }>; count: number }>();
-  for (const row of rows) {
-    const key = String(row._id.accountId);
-    const entry = byAccount.get(key) ?? { entries: [], count: 0 };
-    entry.entries.push({ type: row._id.type, amountMinor: row.amountMinor });
-    entry.count += row.count;
-    byAccount.set(key, entry);
-  }
+  const add = (id: Types.ObjectId, type: BalanceEntry["type"], amountMinor: number, count: number) => {
+    const entry = byAccount.get(String(id)) ?? { entries: [], count: 0 };
+    entry.entries.push({ type, amountMinor });
+    entry.count += count;
+    byAccount.set(String(id), entry);
+  };
+  for (const row of out) add(row._id.accountId, row._id.type === "transfer" ? "transfer_out" : row._id.type, row.amountMinor, row.count);
+  for (const row of incoming) add(row._id, "transfer_in", row.amountMinor, row.count);
   return byAccount;
 }
 
-function map(doc: AccountDocument, total?: { entries: Array<{ type: TransactionType; amountMinor: number }>; count: number }): Account {
+/** Any live transaction in or out of the account. */
+function usedBy(accountId: Types.ObjectId) {
+  return TransactionModel.exists({ $or: [{ accountId }, { toAccountId: accountId }], deletedAt: null });
+}
+
+function map(doc: AccountDocument, total?: Totals): Account {
   const kind = doc.kind as AccountKind;
   return {
     id: String(doc._id),
@@ -109,7 +124,7 @@ async function requireAccount(userId: string, accountId: string) {
 export function updateAccount(userId: string, accountId: string, patch: AccountPatch) {
   return withDb(async () => {
     const doc = await requireAccount(userId, accountId);
-    const used = await TransactionModel.exists({ accountId: doc._id, deletedAt: null });
+    const used = await usedBy(doc._id);
     // Its transactions are in its currency, and its sign depends on its kind.
     if (used && patch.currency && patch.currency.toUpperCase() !== doc.currency) {
       throw new ApiError(409, "account_in_use", "An account with transactions can't change currency");
@@ -133,7 +148,7 @@ export function updateAccount(userId: string, accountId: string, patch: AccountP
 export function deleteAccount(userId: string, accountId: string) {
   return withDb(async () => {
     const doc = await requireAccount(userId, accountId);
-    if (await TransactionModel.exists({ accountId: doc._id, deletedAt: null })) {
+    if (await usedBy(doc._id)) {
       throw new ApiError(409, "account_in_use", "This account has transactions. Archive it instead.");
     }
     await doc.deleteOne();
@@ -152,4 +167,48 @@ export async function assertTransactionAccount(workspaceId: Types.ObjectId, acco
   if (account.currency !== currency.toUpperCase()) {
     throw new ApiError(400, "currency_mismatch", `That account is in ${account.currency}; enter the amount in ${account.currency}`);
   }
+}
+
+/**
+ * For transfers: the account the money goes to (in this workspace, and open
+ * unless the transfer already used it) and what it receives in that account's
+ * currency. A transfer naming neither account is the older kind that moves no
+ * balances. Other types have no "to" side.
+ */
+export async function resolveTransfer(
+  workspaceId: Types.ObjectId,
+  input: {
+    type: TransactionType;
+    accountId?: string | null;
+    currency: string;
+    amountMinor: number;
+    toAccountId?: string | null;
+    toAmountMinor?: number | null;
+    /** When editing: kept for a cross-currency transfer if no new amount received is given. */
+    previousToAmountMinor?: number | null;
+  },
+  keepToAccountId?: string | null,
+): Promise<{ toAccountId: Types.ObjectId | null; toAmountMinor: number | null }> {
+  if (input.type !== "transfer") {
+    if (input.toAccountId) throw new ApiError(400, "invalid_request", "Only a transfer goes to another account");
+    return { toAccountId: null, toAmountMinor: null };
+  }
+  if (!input.accountId && !input.toAccountId) return { toAccountId: null, toAmountMinor: null };
+  let to: { id: string; currency: string } | null = null;
+  if (input.toAccountId) {
+    const account = await AccountModel.findOne({ _id: oid(input.toAccountId), workspaceId }).select("currency archivedAt").lean();
+    if (!account) throw new ApiError(400, "invalid_request", "The account to transfer to is not in this workspace");
+    if (account.archivedAt && String(keepToAccountId) !== input.toAccountId) throw new ApiError(400, "invalid_request", "The account to transfer to is archived");
+    to = { id: input.toAccountId, currency: account.currency };
+  }
+  const from = input.accountId ? { id: input.accountId, currency: input.currency.toUpperCase() } : null;
+  const crossCurrency = Boolean(from && to && from.currency !== to.currency);
+  const result = checkTransfer({
+    from,
+    to,
+    amountMinor: input.amountMinor,
+    toAmountMinor: input.toAmountMinor !== undefined ? input.toAmountMinor : crossCurrency ? input.previousToAmountMinor : null,
+  });
+  if (!result.ok) throw new ApiError(400, "invalid_request", result.error);
+  return { toAccountId: oid(to!.id), toAmountMinor: result.toAmountMinor };
 }

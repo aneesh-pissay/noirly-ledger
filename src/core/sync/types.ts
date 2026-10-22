@@ -71,6 +71,9 @@ export type Transaction = {
   budgetPoolId: string | null;
   /** The account it was paid from or into, if any. */
   accountId: string | null;
+  /** Transfers: the account the money went to, and the amount it received in that account's currency. */
+  toAccountId: string | null;
+  toAmountMinor: MoneyMinor | null;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -256,6 +259,8 @@ export type CreateTransactionInput = {
   currency: string;
   categoryId?: string | null;
   accountId?: string | null;
+  toAccountId?: string | null;
+  toAmountMinor?: number | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;

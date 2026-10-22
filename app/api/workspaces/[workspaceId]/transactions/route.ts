@@ -46,6 +46,8 @@ export async function POST(
       currency: body.currency,
       categoryId: body.categoryId ?? null,
       accountId: body.accountId ?? null,
+      toAccountId: body.toAccountId ?? null,
+      toAmountMinor: body.toAmountMajor ? parseMajorToMinor(body.toAmountMajor) : null,
       date: body.date,
       note: body.note ?? null,
       receiptUrl: body.receiptUrl ?? null,
