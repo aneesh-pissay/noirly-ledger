@@ -66,7 +66,7 @@ export function NetWorthPanel({ workspaceId }: { workspaceId: string }) {
             <LineChart data={history.map((point) => ({ date: point.date, net: point.netMinor }))}>
               <CartesianGrid stroke="var(--hairline)" vertical={false} />
               <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={10} />
-              <YAxis stroke="var(--text-muted)" fontSize={10} tickFormatter={(minor: number) => formatGrouped(Math.round(minor / 100) * 100, data.baseCurrency, numberFormat, 0)} />
+              <YAxis stroke="var(--text-muted)" fontSize={10} tickFormatter={(minor: number) => formatGrouped(Math.round(minor / 100), data.baseCurrency, numberFormat, 0)} />
               <Tooltip contentStyle={tooltipStyle} formatter={(minor) => [money(Number(minor)), "Net worth"]} />
               <Line type="linear" dataKey="net" stroke="var(--accent)" strokeWidth={2} dot={{ r: 4 }} isAnimationActive={false} />
             </LineChart>

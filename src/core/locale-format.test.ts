@@ -41,3 +41,11 @@ describe("fiscalYear", () => {
     expect(defaultFiscalStart("USD")).toBe(1);
   });
 });
+
+describe("chart ticks", () => {
+  it("show whole units of the currency", () => {
+    // Axes get minor units; rounding to whole units first keeps 40,000.00 reading as 40,000.
+    expect(formatGrouped(Math.round(4_000_000 / 100), "USD", "auto", 0)).toBe("40,000");
+    expect(formatGrouped(Math.round(1_234_567_00 / 100), "INR", "auto", 0)).toBe("12,34,567");
+  });
+});
