@@ -19,6 +19,7 @@ export { Project, type ProjectDocument } from "./Project";
 export { BudgetPlan, type BudgetPlanDocument } from "./BudgetPlan";
 export { EnvelopeMove, type EnvelopeMoveDocument } from "./EnvelopeMove";
 export { BudgetTemplate, type BudgetTemplateDocument } from "./BudgetTemplate";
+export { BudgetRevision, type BudgetRevisionDocument } from "./BudgetRevision";
 export {
   WorkspaceInvite,
   type WorkspaceInviteDocument,

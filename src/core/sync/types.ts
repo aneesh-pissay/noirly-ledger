@@ -11,6 +11,7 @@ import type { AccountKind } from "@/src/core/accounts";
 import type { Clearing } from "@/src/core/clearing";
 import type { SplitLine } from "@/src/core/splits";
 import type { RolloverMode } from "@/src/core/budgets/rollover";
+import type { RevisionReason } from "@/src/core/budgets/revisions";
 
 export type {
   ApprovalStatus,
@@ -336,6 +337,22 @@ export type UpsertBudgetInput = {
   /** The day carrying starts from; defaults to the start of the current period when rollover is turned on. */
   rolloverSince?: string | null;
   renew?: boolean;
+  /** Server-side: why the limit changed, for the budget's history (defaults to created or edited). */
+  revisionReason?: RevisionReason;
+};
+
+export type BudgetRevisionRecord = {
+  id: string;
+  budgetId: string;
+  categoryId: string;
+  period: BudgetPeriod;
+  previousLimitMinor: MoneyMinor | null;
+  limitMinor: MoneyMinor | null;
+  reason: RevisionReason;
+  note: string | null;
+  moveId: string | null;
+  otherBudgetId: string | null;
+  createdAt: string;
 };
 
 /** What an expense being entered would do to one budget. */

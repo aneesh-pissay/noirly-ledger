@@ -4,6 +4,7 @@ import type {
   MonthPlan,
   BudgetTemplateSummary,
   BudgetImpact,
+  BudgetRevisionRecord,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -159,6 +160,15 @@ export const api = {
   },
   checkBudgets(workspaceId: string, body: { lines: Array<{ categoryId: string; amountMajor: string }>; currency: string; date: string }) {
     return request<{ impacts: BudgetImpact[]; missingRate: boolean }>(`/api/workspaces/${workspaceId}/budget-check`, { method: "POST", body: JSON.stringify(body) });
+  },
+  moveBudgetMoney(workspaceId: string, body: { fromBudgetId: string; toBudgetId: string; amountMajor: string; note?: string | null }) {
+    return request<{ fromLimitMinor: number; toLimitMinor: number | null }>(`/api/workspaces/${workspaceId}/budgets/move`, { method: "POST", body: JSON.stringify(body) });
+  },
+  listBudgetRevisions(workspaceId: string, budgetId?: string) {
+    return request<{ revisions: BudgetRevisionRecord[] }>(`/api/workspaces/${workspaceId}/budget-revisions${budgetId ? `?budgetId=${budgetId}` : ""}`);
+  },
+  restoreBudgetRevision(revisionId: string) {
+    return request<{ limitMinor: number }>(`/api/budget-revisions/${revisionId}/restore`, { method: "POST", body: "{}" });
   },
   listBudgetTemplates(workspaceId: string) {
     return request<{ templates: BudgetTemplateSummary[] }>(`/api/workspaces/${workspaceId}/budget-templates`);

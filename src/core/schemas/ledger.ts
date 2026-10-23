@@ -119,6 +119,13 @@ export const upsertBudgetBodySchema = z.object({
 
 export const saveBudgetTemplateBodySchema = z.object({ name: z.string().trim().min(1).max(80) });
 
+export const budgetMoveBodySchema = z.object({
+  fromBudgetId: z.string().min(1),
+  toBudgetId: z.string().min(1),
+  amountMajor: amountMajorSchema,
+  note: z.string().trim().max(200).nullable().optional(),
+});
+
 /** An expense being entered, to check against its budgets: one line, or a split's lines. */
 export const budgetCheckBodySchema = z.object({
   lines: z.array(z.object({ categoryId: z.string().min(1), amountMajor: amountMajorSchema })).min(1).max(20),

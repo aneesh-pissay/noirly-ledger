@@ -14,6 +14,7 @@ import { ROLLOVER_LABEL, ROLLOVER_MODES, type RolloverMode } from "@/src/core/bu
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { PlanPanel } from "@/src/features/budgets/PlanPanel";
 import { TemplatesPanel } from "@/src/features/budgets/TemplatesPanel";
+import { BudgetHistoryPanel } from "@/src/features/budgets/BudgetHistoryPanel";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -197,6 +198,13 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
           );
         })}
       </ul>
+
+      <BudgetHistoryPanel
+        workspaceId={workspaceId}
+        baseCurrency={baseCurrency}
+        budgets={rows.map((row) => row.budget)}
+        categoryName={categoryName}
+      />
     </PageContainer>
   );
 }

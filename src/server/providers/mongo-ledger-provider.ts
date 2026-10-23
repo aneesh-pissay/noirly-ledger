@@ -74,6 +74,7 @@ import { spendSign } from "@/src/core/refunds";
 import { clearingOf, reconciledChange } from "@/src/core/clearing";
 import { checkParent, topLevelOf } from "@/src/core/categories";
 import { budgetStatus } from "@/src/server/budgets";
+import { recordRevision } from "@/src/server/budget-revisions";
 import { canRollOver } from "@/src/core/budgets/rollover";
 import { labelFields } from "@/src/server/labels";
 import { assertTransactionProject } from "@/src/server/projects";
@@ -666,7 +667,7 @@ export function createMongoLedgerProvider(
           categoryId: oid(input.categoryId),
           period: input.period,
           periodStart: input.periodStart ? new Date(input.periodStart) : null,
-        }).select("rollover rolloverSince").lean();
+        }).select("rollover rolloverSince limitAmountMinor").lean();
         if (input.renew && input.period !== "custom") {
           throw new ApiError(400, "invalid_request", "Weekly, monthly and yearly budgets already start again each period");
         }
@@ -711,6 +712,16 @@ export function createMongoLedgerProvider(
           { upsert: true, returnDocument: "after" },
         );
         if (!doc) throw new ApiError(500, "internal_error", "Failed to save budget");
+        // Each change to the limit is kept, so it can be looked back on (and restored).
+        if (!existing || existing.limitAmountMinor !== doc.limitAmountMinor) {
+          await recordRevision({
+            budget: doc,
+            previousLimitMinor: existing?.limitAmountMinor ?? null,
+            limitMinor: doc.limitAmountMinor,
+            reason: input.revisionReason ?? (existing ? "edited" : "created"),
+            userId: ctx.userId,
+          });
+        }
         return mapBudget(doc);
       });
     },
@@ -721,6 +732,7 @@ export function createMongoLedgerProvider(
         if (!doc) throw new ApiError(404, "not_found", "Budget not found");
         await requireAction(ctx.userId, doc.workspaceId.toString(), "budget.manage");
         await doc.deleteOne();
+        await recordRevision({ budget: doc, previousLimitMinor: doc.limitAmountMinor, limitMinor: null, reason: "deleted", userId: ctx.userId });
       });
     },
 

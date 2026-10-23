@@ -1,5 +1,6 @@
 import type { Types } from "mongoose";
-import { Budget as BudgetModel, Transaction as TransactionModel, type BudgetDocument } from "@/src/server/models";
+import { Budget as BudgetModel, BudgetRevision, Transaction as TransactionModel, type BudgetDocument } from "@/src/server/models";
+import { limitAt } from "@/src/core/budgets/revisions";
 import { renewedRange } from "@/src/core/budgets/templates";
 import { budgetCategoryIds } from "@/src/server/categories/tree";
 import { spentInCategories } from "@/src/server/splits";
@@ -85,7 +86,11 @@ export async function budgetStatus(budget: BudgetDocument, fiscalYearStartMonth:
         for (const [day, amount] of byDay) if (day >= from && day <= to) total += amount;
         return total;
       });
-      carriedInMinor = carriedIn(mode, budget.limitAmountMinor, spentPerPeriod);
+      // Each finished period is measured against the limit it had when it ended.
+      const revisions = await BudgetRevision.find({ budgetId: budget._id }).select("createdAt previousLimitMinor limitMinor").lean();
+      const history = revisions.map((r) => ({ at: r.createdAt, previousLimitMinor: r.previousLimitMinor ?? null, limitMinor: r.limitMinor ?? null }));
+      const limits = periods.map((period) => limitAt(history, period.to, budget.limitAmountMinor));
+      carriedInMinor = carriedIn(mode, limits, spentPerPeriod);
     }
   }
   const availableMinor = budget.limitAmountMinor + carriedInMinor;

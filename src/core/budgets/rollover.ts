@@ -43,15 +43,16 @@ export function finishedPeriods(period: BudgetPeriod, since: Date, now: Date, fi
 }
 
 /**
- * What's carried into the current period from the finished ones, each with
- * the same limit. Unspent-only carry never goes below zero: an overspent
- * period wipes out what had built up, but doesn't take from the next.
+ * What's carried into the current period from the finished ones, each
+ * measured against its own limit (one number when the limit never changed).
+ * Unspent-only carry never goes below zero: an overspent period wipes out
+ * what had built up, but doesn't take from the next.
  */
-export function carriedIn(mode: RolloverMode, limitMinor: number, spentPerPeriod: number[]) {
+export function carriedIn(mode: RolloverMode, limits: number | number[], spentPerPeriod: number[]) {
   if (mode === "none") return 0;
   let carry = 0;
-  for (const spent of spentPerPeriod) {
-    carry += limitMinor - spent;
+  for (const [i, spent] of spentPerPeriod.entries()) {
+    carry += (Array.isArray(limits) ? limits[i] ?? 0 : limits) - spent;
     if (mode === "unspent" && carry < 0) carry = 0;
   }
   return carry;

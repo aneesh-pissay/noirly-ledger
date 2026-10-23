@@ -112,6 +112,7 @@ export function applyBudgetTemplate(
         period: line.period as BudgetPeriod,
         limitAmountMinor: limits[i]!,
         rollover: (line.rollover ?? "none") as RolloverMode,
+        revisionReason: "template",
       });
     }
     // The income it was shared out from becomes this month's plan, unless the month already has one.
