@@ -16,6 +16,7 @@ import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { ViewFilters } from "@/src/core/search";
 import type { FieldChange, HistoryAction } from "@/src/core/history";
+import type { GstAmounts, GstSettings } from "@/src/core/gst";
 
 export type {
   ApprovalStatus,
@@ -61,6 +62,8 @@ export type Category = {
   isSystem: boolean;
   /** Set on a subcategory: its top-level category. */
   parentId: string | null;
+  /** GST new transactions in it start with. */
+  defaultGst: Pick<GstSettings, "ratePct" | "treatment" | "supply" | "itcEligible"> | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -96,6 +99,8 @@ export type Transaction = {
   clearing: Clearing;
   /** Files kept with it besides the receipt. */
   attachmentCount: number;
+  /** GST in what was paid, with the tax worked out. */
+  gst: (GstSettings & GstAmounts) | null;
   /** UPI payments: the 12-digit reference, and the UPI ID paid to or from. */
   upiRef: string | null;
   upiId: string | null;
@@ -320,6 +325,8 @@ export type CreateTransactionInput = {
   refundOfId?: string | null;
   upiRef?: string | null;
   upiId?: string | null;
+  /** GST settings; the tax is worked out from the amount. null clears it. */
+  gst?: GstSettings | null;
   /** New transactions are pending or cleared; only reconciling an account makes them reconciled. */
   clearing?: Clearing;
   /** Two or more lines that add up to the amount; null removes a split. */
@@ -344,6 +351,7 @@ export type CreateCategoryInput = {
   icon: string;
   color: string;
   parentId?: string | null;
+  defaultGst?: Category["defaultGst"];
 };
 
 export type UpsertBudgetInput = {

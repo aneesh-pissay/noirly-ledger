@@ -19,6 +19,7 @@ export const TRACKED_FIELDS = [
   "splits",
   "upiRef",
   "upiId",
+  "gst",
 ] as const;
 export type TrackedField = (typeof TRACKED_FIELDS)[number];
 
@@ -38,6 +39,7 @@ export const FIELD_LABEL: Record<TrackedField, string> = {
   splits: "Split",
   upiRef: "UPI reference",
   upiId: "UPI ID",
+  gst: "GST",
 };
 
 export const HISTORY_ACTIONS = ["created", "updated", "deleted", "attachment_added", "attachment_removed"] as const;
@@ -78,6 +80,7 @@ export function snapshotOf(t: {
   splits?: Array<{ categoryId: string | null; amountMinor: number }>;
   upiRef?: string | null;
   upiId?: string | null;
+  gst?: { ratePct: number; treatment: string; supply: string; gstin?: string | null } | null;
 }): Snapshot {
   return {
     type: t.type,
@@ -95,6 +98,7 @@ export function snapshotOf(t: {
     splits: t.splits?.length ? t.splits.map((line) => `${line.categoryId ?? "none"}:${line.amountMinor}`).join(", ") : null,
     upiRef: t.upiRef ?? null,
     upiId: t.upiId ?? null,
+    gst: t.gst ? `${t.gst.treatment === "taxable" ? `${t.gst.ratePct}%` : t.gst.treatment} ${t.gst.supply === "inter" ? "IGST" : "CGST+SGST"}${t.gst.gstin ? ` ${t.gst.gstin}` : ""}` : null,
   };
 }
 

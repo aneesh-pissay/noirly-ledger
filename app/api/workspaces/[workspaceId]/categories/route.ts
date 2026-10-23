@@ -31,6 +31,7 @@ export async function POST(
       icon: body.icon,
       color: body.color,
       parentId: body.parentId ?? null,
+      defaultGst: body.defaultGst ?? null,
     });
     return jsonOk({ category }, 201);
   } catch (error) {

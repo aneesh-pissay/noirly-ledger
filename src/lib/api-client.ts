@@ -37,6 +37,9 @@ import type { NumberFormat } from "@/src/core/locale-format";
 import type { ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { BulkChange } from "@/src/core/bulk";
+import type { gstSummary } from "@/src/core/gst";
+
+type GstSummary = ReturnType<typeof gstSummary>;
 
 type ApiErrorBody = { error?: string; message?: string };
 
@@ -97,7 +100,7 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     );
   },
-  updateCategory(categoryId: string, body: { name?: string; color?: string; parentId?: string | null }) {
+  updateCategory(categoryId: string, body: { name?: string; color?: string; parentId?: string | null; defaultGst?: Category["defaultGst"] }) {
     return request<{ category: Category }>(`/api/categories/${categoryId}`, { method: "PATCH", body: JSON.stringify(body) });
   },
   deleteCategory(categoryId: string) {
@@ -191,6 +194,9 @@ export const api = {
   },
   bulkCreateTransactions(workspaceId: string, transactions: Array<Record<string, unknown>>) {
     return request<{ transactions: Transaction[] }>(`/api/workspaces/${workspaceId}/transactions/bulk-create`, { method: "POST", body: JSON.stringify({ transactions }) });
+  },
+  getGstSummary(workspaceId: string, from: string, to: string) {
+    return request<{ summary: GstSummary }>(`/api/workspaces/${workspaceId}/gst-summary?from=${from}&to=${to}`);
   },
   getTransactionActivity(transactionId: string) {
     return request<{ activity: TransactionActivity }>(`/api/transactions/${transactionId}/activity`);

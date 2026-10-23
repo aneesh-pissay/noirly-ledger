@@ -65,14 +65,14 @@ test.describe("subcategories", () => {
     const child = page.locator('[data-category="Home › Electricity"]');
     await expect(child).toBeVisible();
     // A parent with subcategories can't be moved.
-    await expect(page.locator('[data-category="Home"]').getByRole("combobox")).toHaveCount(0);
+    await expect(page.locator('[data-category="Home"]').getByRole("combobox", { name: "Move Home" })).toHaveCount(0);
     await page.screenshot({ path: "test-results/subcategories.png", fullPage: true });
 
     await page.goto("/transactions");
     await page.getByRole("button", { name: "Add", exact: true }).click();
     const dialog = page.getByRole("dialog", { name: "Add transaction" });
     await dialog.getByLabel("Category").selectOption({ label: "Home › Electricity" });
-    await dialog.getByLabel("Amount").fill("42");
+    await dialog.getByLabel("Amount", { exact: true }).fill("42");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.locator("div.absolute", { hasText: "Home › Electricity" })).toBeVisible();

@@ -89,6 +89,9 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
     merchant: txn.merchant ?? "",
     tags: (txn.tags ?? []).join(" "),
     project: txn.projectId ? projectById.get(txn.projectId.toString()) ?? "" : "",
+    gst: txn.gst
+      ? { ratePct: txn.gst.ratePct, taxableMinor: txn.gst.taxableMinor, cgstMinor: txn.gst.cgstMinor, sgstMinor: txn.gst.sgstMinor, igstMinor: txn.gst.igstMinor, gstin: txn.gst.gstin ?? null, hsn: txn.gst.hsn ?? null }
+      : null,
   }));
 }
 

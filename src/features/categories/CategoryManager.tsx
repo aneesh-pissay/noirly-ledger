@@ -5,6 +5,7 @@ import { useState } from "react";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { categoryTree } from "@/src/core/categories";
+import { GST_RATES } from "@/src/core/gst";
 import { Button, PageContainer } from "@noirly-dev/ui";
 import { Input, Label } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
@@ -33,6 +34,13 @@ export function CategoryManager({ workspaceId }: Props) {
     onError: (err: Error) => setError(err.message),
   });
 
+  const setGst = useMutation({
+    mutationFn: ({ id, rate }: { id: string; rate: string }) =>
+      api.updateCategory(id, { defaultGst: rate === "" ? null : rate === "exempt" ? { ratePct: 0, treatment: "exempt", supply: "intra", itcEligible: false } : { ratePct: Number(rate), treatment: "taxable", supply: "intra", itcEligible: false } }),
+    onMutate: () => setError(null),
+    onSuccess: () => refresh(),
+    onError: (err: Error) => setError(err.message),
+  });
   const move = useMutation({
     mutationFn: ({ id, parentId }: { id: string; parentId: string | null }) => api.updateCategory(id, { parentId }),
     onMutate: () => setError(null),
@@ -109,6 +117,18 @@ export function CategoryManager({ workspaceId }: Props) {
               ) : null}
             </span>
             <span className="flex shrink-0 items-center gap-3">
+              {/* GST that new transactions here start with. */}
+              <Select
+                aria-label={`GST for ${category.name}`}
+                className="h-8 w-28 text-xs"
+                value={category.defaultGst ? (category.defaultGst.treatment === "taxable" ? String(category.defaultGst.ratePct) : "exempt") : ""}
+                disabled={setGst.isPending}
+                onChange={(e) => setGst.mutate({ id: category.id, rate: e.target.value })}
+              >
+                <option value="">No GST</option>
+                {GST_RATES.map((r) => <option key={r} value={r}>GST {r}%</option>)}
+                <option value="exempt">Exempt</option>
+              </Select>
               {/* One level deep: a category with subcategories stays at the top. */}
               {!hasChildren(category.id) ? (
                 <Select

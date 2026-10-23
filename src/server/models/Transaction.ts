@@ -11,6 +11,7 @@ import {
   TRANSACTION_TYPES,
 } from "@/src/core/models/enums";
 import { CLEARING_STATES } from "@/src/core/clearing";
+import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
 
 const recurrenceSchema = new Schema(
   {
@@ -42,6 +43,24 @@ const attachmentSchema = new Schema({
   uploadedById: { type: Schema.Types.ObjectId, ref: "LedgerUser", required: true },
   uploadedAt: { type: Date, required: true },
 });
+
+// GST in what was paid: the settings, and the tax worked out from the amount (see src/core/gst.ts).
+const gstSchema = new Schema(
+  {
+    ratePct: { type: Number, required: true },
+    treatment: { type: String, enum: GST_TREATMENTS, required: true },
+    supply: { type: String, enum: GST_SUPPLIES, required: true },
+    gstin: { type: String, default: null },
+    hsn: { type: String, default: null },
+    itcEligible: { type: Boolean, default: false },
+    taxableMinor: { type: Number, required: true },
+    cgstMinor: { type: Number, required: true },
+    sgstMinor: { type: Number, required: true },
+    igstMinor: { type: Number, required: true },
+    taxMinor: { type: Number, required: true },
+  },
+  { _id: false },
+);
 
 const transactionSchema = new Schema(
   {
@@ -106,6 +125,7 @@ const transactionSchema = new Schema(
     // UPI payments: the 12-digit reference and the UPI ID paid to or from (see src/core/upi.ts).
     upiRef: { type: String, default: null },
     upiId: { type: String, default: null },
+    gst: { type: gstSchema, default: null },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

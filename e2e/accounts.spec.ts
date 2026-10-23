@@ -107,7 +107,7 @@ test.describe("accounts", () => {
     await dialog.getByLabel("Account").selectOption({ label: "Pocket cash (INR)" });
     await expect(dialog.getByLabel("Currency")).toHaveValue("INR");
     await expect(dialog.getByLabel("Currency")).toBeDisabled();
-    await dialog.getByLabel("Amount").fill("120");
+    await dialog.getByLabel("Amount", { exact: true }).fill("120");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
     await expect(page.getByText("Pocket cash").first()).toBeVisible();

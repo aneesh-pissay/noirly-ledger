@@ -10,6 +10,7 @@ import { NUMBER_FORMATS } from "@/src/core/locale-format";
 import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
 import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
 import { MAX_BULK, MAX_BULK_CREATE } from "@/src/core/bulk";
+import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
 
 export const currencyCode = z
   .string()
@@ -28,6 +29,16 @@ export const recurrenceSchema = z.object({
   until: z.string().nullable().optional(),
 });
 
+/** GST settings on a transaction; amounts are worked out on the server. */
+export const gstSettingsSchema = z.object({
+  ratePct: z.number().min(0).max(40),
+  treatment: z.enum(GST_TREATMENTS).default("taxable"),
+  supply: z.enum(GST_SUPPLIES).default("intra"),
+  gstin: z.string().max(20).nullable().optional(),
+  hsn: z.string().max(12).nullable().optional(),
+  itcEligible: z.boolean().optional(),
+});
+
 export const createTransactionBodySchema = z.object({
   type: z.enum(TRANSACTION_TYPES),
   amountMajor: amountMajorSchema,
@@ -43,6 +54,7 @@ export const createTransactionBodySchema = z.object({
   /** UPI reference (12 digits, spaces allowed) and UPI ID; checked properly on the server. */
   upiRef: z.string().max(40).nullable().optional(),
   upiId: z.string().max(100).nullable().optional(),
+  gst: gstSettingsSchema.nullable().optional(),
   tags: z.array(z.string().trim().max(40)).max(20).nullable().optional(),
   merchant: z.string().trim().max(120).nullable().optional(),
   projectId: z.string().min(1).nullable().optional(),
@@ -98,6 +110,8 @@ const categoryFields = {
   color: z.string().trim().regex(/^#([0-9a-fA-F]{6})$/),
   /** Makes it a subcategory of this top-level category; null makes it top-level. */
   parentId: z.string().min(1).nullable().optional(),
+  /** GST new transactions in it start with; null for none. */
+  defaultGst: gstSettingsSchema.pick({ ratePct: true, treatment: true, supply: true, itcEligible: true }).nullable().optional(),
 };
 
 export const createCategoryBodySchema = z.object({

@@ -83,6 +83,8 @@ import { escapeRegex, parseSearch } from "@/src/core/search";
 import { diffSnapshots, snapshotOf } from "@/src/core/history";
 import { recordChange } from "@/src/server/transaction-activity";
 import { upiFields } from "@/src/server/upi";
+import { gstFields, gstSettingsOf } from "@/src/server/gst";
+import { checkGstSettings } from "@/src/core/gst";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
 
@@ -103,6 +105,14 @@ async function withRefunded(items: Transaction[]) {
   if (!expenses.length) return items;
   const refunded = await refundedByExpense(expenses.map((t) => new Types.ObjectId(t.id)));
   return items.map((t) => (refunded.has(t.id) ? { ...t, refundedMinor: refunded.get(t.id)! } : t));
+}
+
+/** A category's default GST, checked like a transaction's. */
+function checkedDefaultGst(value: Category["defaultGst"] | undefined) {
+  if (!value) return null;
+  const check = checkGstSettings({ ...value, supply: value.supply ?? "intra" });
+  if (!check.ok) throw new ApiError(400, "invalid_request", check.error);
+  return { ratePct: value.ratePct, treatment: value.treatment, supply: value.supply ?? "intra", itcEligible: Boolean(value.itcEligible) };
 }
 
 function optionalOid(id: string | null | undefined) {
@@ -274,6 +284,7 @@ export function createMongoLedgerProvider(
           color: input.color,
           isSystem: false,
           parentId: optionalOid(input.parentId),
+          defaultGst: checkedDefaultGst(input.defaultGst),
         });
         return mapCategory(doc);
       });
@@ -291,6 +302,7 @@ export function createMongoLedgerProvider(
           await assertParent(doc.workspaceId, doc._id, patch.parentId);
           doc.parentId = optionalOid(patch.parentId);
         }
+        if (patch.defaultGst !== undefined) doc.set("defaultGst", checkedDefaultGst(patch.defaultGst));
         await doc.save();
         return mapCategory(doc);
       });
@@ -443,6 +455,8 @@ export function createMongoLedgerProvider(
         });
         const projectId = input.projectId ?? refundOf?.projectId?.toString() ?? null;
         const upi = await upiFields(workspace._id, { upiRef: input.upiRef ?? null, upiId: input.upiId ?? null });
+        // A refund carries its expense's GST, worked out on the refunded amount.
+        const gst = gstFields(input.type, input.amountMinor, input.gst !== undefined ? input.gst : gstSettingsOf(refundOf?.gst));
         await assertTransactionProject(workspace._id, projectId, refundOf?.projectId?.toString() ?? null);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
@@ -474,6 +488,7 @@ export function createMongoLedgerProvider(
           splits: storedSplits(lines, baseAmountMinor),
           ...labels,
           ...upi,
+          gst,
           projectId: optionalOid(projectId),
           date: asOf,
           note: input.note ?? null,
@@ -585,6 +600,8 @@ export function createMongoLedgerProvider(
         if (patch.note !== undefined) doc.note = patch.note;
         doc.set(labelFields({ tags: patch.tags, merchant: patch.merchant }));
         doc.set(await upiFields(doc.workspaceId, { upiRef: patch.upiRef, upiId: patch.upiId }, doc._id));
+        // GST follows the amount: recomputed from the new settings, or the old ones if unchanged.
+        doc.set("gst", gstFields(doc.type, doc.amountMinor, patch.gst !== undefined ? patch.gst : doc.type === "transfer" ? null : gstSettingsOf(doc.gst)));
         if (patch.projectId !== undefined) {
           await assertTransactionProject(workspace._id, patch.projectId, doc.projectId?.toString() ?? null);
           doc.projectId = optionalOid(patch.projectId);

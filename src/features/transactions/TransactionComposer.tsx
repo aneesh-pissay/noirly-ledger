@@ -15,6 +15,9 @@ import { useUIStore } from "@/src/stores/ui-store";
 import { categoryTree } from "@/src/core/categories";
 import { parseTagInput } from "@/src/core/labels";
 import { BudgetWarning } from "@/src/features/transactions/BudgetWarning";
+import { GST_RATES, GST_SUPPLIES, GST_SUPPLY_LABEL, GST_TREATMENTS, GST_TREATMENT_LABEL, gstAmounts, type GstSupply, type GstTreatment } from "@/src/core/gst";
+
+const NO_GST = { gstOn: false, gstRate: "18", gstTreatment: "taxable" as GstTreatment, gstSupply: "intra" as GstSupply, gstin: "", hsn: "", itc: false };
 
 type FormValues = {
   type: "expense" | "income" | "transfer";
@@ -34,6 +37,14 @@ type FormValues = {
   projectId: string;
   upiRef: string;
   upiId: string;
+  /** GST: on or off, and its settings as typed. */
+  gstOn: boolean;
+  gstRate: string;
+  gstTreatment: GstTreatment;
+  gstSupply: GstSupply;
+  gstin: string;
+  hsn: string;
+  itc: boolean;
 };
 
 type Props = {
@@ -86,6 +97,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
       projectId: "",
       upiRef: "",
       upiId: "",
+      ...NO_GST,
     },
   });
 
@@ -115,6 +127,16 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         tags: parseTagInput(values.tags),
         projectId: values.projectId || null,
         upiRef: values.upiRef.trim() || null,
+        gst: values.gstOn && values.type !== "transfer"
+          ? {
+              ratePct: values.gstTreatment === "taxable" ? Number(values.gstRate) : 0,
+              treatment: values.gstTreatment,
+              supply: values.gstSupply,
+              gstin: values.gstin.trim() || null,
+              hsn: values.hsn.trim() || null,
+              itcEligible: values.itc,
+            }
+          : null,
         upiId: values.upiId.trim() || null,
         recurrence: values.frequency
           ? { frequency: values.frequency, interval: 1 }
@@ -150,6 +172,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         projectId: "",
         upiRef: "",
         upiId: "",
+        ...NO_GST,
       });
       setReceipt(null);
       setLines(null);
@@ -164,6 +187,25 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
   const isTransfer = txType === "transfer";
   const amountMajor = useWatch({ control: form.control, name: "amountMajor" });
   const watchedCategory = useWatch({ control: form.control, name: "categoryId" });
+  const gstOn = useWatch({ control: form.control, name: "gstOn" });
+  const gstTreatment = useWatch({ control: form.control, name: "gstTreatment" });
+  const gstRate = useWatch({ control: form.control, name: "gstRate" });
+  const gstSupply = useWatch({ control: form.control, name: "gstSupply" });
+  // The tax in what's being entered, worked out as it's typed.
+  const gstLine = (() => {
+    if (!gstOn) return "";
+    let minor: number;
+    try {
+      minor = parseMajorToMinor(amountMajor.trim() || "0");
+    } catch {
+      return "";
+    }
+    const split = gstAmounts(minor, { ratePct: Number(gstRate), treatment: gstTreatment, supply: gstSupply });
+    if (!split.taxMinor) return GST_TREATMENT_LABEL[gstTreatment];
+    return gstSupply === "inter"
+      ? `${formatMinorToMajor(split.taxableMinor)} + IGST ${formatMinorToMajor(split.igstMinor)}`
+      : `${formatMinorToMajor(split.taxableMinor)} + CGST ${formatMinorToMajor(split.cgstMinor)} + SGST ${formatMinorToMajor(split.sgstMinor)}`;
+  })();
   const watchedCurrency = useWatch({ control: form.control, name: "currency" });
   const watchedDate = useWatch({ control: form.control, name: "date" });
   // What's left to give a line, so the split can be balanced before saving.
@@ -342,7 +384,19 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
                 Split
               </button>
             </div>
-            <Select id="category" {...form.register("categoryId")}>
+            <Select id="category" {...form.register("categoryId", {
+              // A category's default GST fills in the GST section, unless it's already been set here.
+              onChange: (event) => {
+                const chosen = categories.data?.categories.find((c) => c.id === event.target.value);
+                if (chosen?.defaultGst && !form.getValues("gstOn")) {
+                  form.setValue("gstOn", true);
+                  form.setValue("gstRate", String(chosen.defaultGst.ratePct));
+                  form.setValue("gstTreatment", chosen.defaultGst.treatment);
+                  form.setValue("gstSupply", chosen.defaultGst.supply);
+                  form.setValue("itc", Boolean(chosen.defaultGst.itcEligible));
+                }
+              },
+            })}>
               <option value="">Uncategorized</option>
               {categoryTree(categories.data?.categories ?? []).map((category) => (
                 <option key={category.id} value={category.id}>
@@ -393,6 +447,51 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             {(tags.data?.tags ?? []).map((tag) => <option key={tag.tag} value={tag.tag} />)}
           </datalist>
         </div>
+        {!isTransfer ? (
+          <details className="group rounded-[var(--r-md)] border border-[var(--hairline)] px-3 py-2" open={gstOn || undefined}>
+            <summary className="cursor-pointer text-xs uppercase tracking-wide text-[var(--muted-foreground)]">GST{gstOn ? ` · ${gstLine}` : ""}</summary>
+            <label className="mt-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" {...form.register("gstOn")} />
+              This amount includes GST
+            </label>
+            {gstOn ? (
+              <div className="mt-2 grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="gst-treatment">Treatment</Label>
+                  <Select id="gst-treatment" {...form.register("gstTreatment")}>
+                    {GST_TREATMENTS.map((t) => <option key={t} value={t}>{GST_TREATMENT_LABEL[t]}</option>)}
+                  </Select>
+                </div>
+                {gstTreatment === "taxable" ? (
+                  <div>
+                    <Label htmlFor="gst-rate">Rate</Label>
+                    <Select id="gst-rate" {...form.register("gstRate")}>
+                      {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                    </Select>
+                  </div>
+                ) : <div />}
+                <div>
+                  <Label htmlFor="gst-supply">Supply</Label>
+                  <Select id="gst-supply" {...form.register("gstSupply")}>
+                    {GST_SUPPLIES.map((s) => <option key={s} value={s}>{GST_SUPPLY_LABEL[s]}</option>)}
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="gst-gstin">Supplier GSTIN (optional)</Label>
+                  <Input id="gst-gstin" className="font-mono uppercase" maxLength={20} {...form.register("gstin")} />
+                </div>
+                <div>
+                  <Label htmlFor="gst-hsn">HSN or SAC (optional)</Label>
+                  <Input id="gst-hsn" inputMode="numeric" className="font-mono" maxLength={12} {...form.register("hsn")} />
+                </div>
+                <label className="flex items-end gap-2 pb-2 text-sm">
+                  <input type="checkbox" {...form.register("itc")} />
+                  Can claim input tax credit
+                </label>
+              </div>
+            ) : null}
+          </details>
+        ) : null}
         <details className="group rounded-[var(--r-md)] border border-[var(--hairline)] px-3 py-2">
           <summary className="cursor-pointer text-xs uppercase tracking-wide text-[var(--muted-foreground)]">UPI details</summary>
           <div className="mt-2 grid grid-cols-2 gap-3">

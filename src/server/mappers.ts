@@ -1,4 +1,5 @@
 import { clearingOf } from "@/src/core/clearing";
+import type { GstSupply, GstTreatment } from "@/src/core/gst";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { RolloverMode } from "@/src/core/budgets/rollover";
@@ -61,6 +62,14 @@ export function mapCategory(doc: CategoryDocument): Category {
     color: doc.color,
     isSystem: Boolean(doc.isSystem),
     parentId: doc.parentId ? doc.parentId.toString() : null,
+    defaultGst: doc.defaultGst
+      ? {
+          ratePct: doc.defaultGst.ratePct ?? 0,
+          treatment: (doc.defaultGst.treatment ?? "taxable") as GstTreatment,
+          supply: (doc.defaultGst.supply ?? "intra") as GstSupply,
+          itcEligible: Boolean(doc.defaultGst.itcEligible),
+        }
+      : null,
     archivedAt: iso(doc.archivedAt),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
@@ -87,6 +96,21 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     refundedMinor: 0,
     clearing: clearingOf(doc.clearing),
     attachmentCount: doc.attachments?.length ?? 0,
+    gst: doc.gst
+      ? {
+          ratePct: doc.gst.ratePct,
+          treatment: doc.gst.treatment as GstTreatment,
+          supply: doc.gst.supply as GstSupply,
+          gstin: doc.gst.gstin ?? null,
+          hsn: doc.gst.hsn ?? null,
+          itcEligible: Boolean(doc.gst.itcEligible),
+          taxableMinor: doc.gst.taxableMinor,
+          cgstMinor: doc.gst.cgstMinor,
+          sgstMinor: doc.gst.sgstMinor,
+          igstMinor: doc.gst.igstMinor,
+          taxMinor: doc.gst.taxMinor,
+        }
+      : null,
     upiRef: doc.upiRef ?? null,
     upiId: doc.upiId ?? null,
     installmentPlanId: doc.installmentPlanId ? doc.installmentPlanId.toString() : null,

@@ -8,6 +8,7 @@ import { qk } from "@/src/core/sync/query-keys";
 import { FIELD_LABEL, MAX_ATTACHMENTS, type FieldChange } from "@/src/core/history";
 import { CLEARING_LABEL, clearingOf } from "@/src/core/clearing";
 import { formatUpiRef } from "@/src/core/upi";
+import { GST_TREATMENT_LABEL } from "@/src/core/gst";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import type { Transaction } from "@/src/core/sync/types";
 
@@ -105,6 +106,16 @@ function DetailsBody({ workspaceId, transaction, categoryName, accountName, proj
         <span className="font-mono">{money(transaction.type === "expense" ? -transaction.amountMinor : transaction.amountMinor, transaction.currency)}</span>
         <span className="text-[var(--muted-foreground)]"> · {transaction.date} · {transaction.merchant ?? transaction.note ?? categoryName(transaction.categoryId)}</span>
       </p>
+      {transaction.gst ? (
+        <p className="font-mono text-xs text-[var(--muted-foreground)]">
+          GST {transaction.gst.treatment === "taxable" ? `${transaction.gst.ratePct}%` : GST_TREATMENT_LABEL[transaction.gst.treatment]} · taxable {money(transaction.gst.taxableMinor, transaction.currency)}
+          {transaction.gst.supply === "inter"
+            ? ` · IGST ${money(transaction.gst.igstMinor, transaction.currency)}`
+            : ` · CGST ${money(transaction.gst.cgstMinor, transaction.currency)} + SGST ${money(transaction.gst.sgstMinor, transaction.currency)}`}
+          {transaction.gst.gstin ? ` · ${transaction.gst.gstin}` : ""}
+          {transaction.gst.itcEligible ? " · ITC" : ""}
+        </p>
+      ) : null}
       {transaction.upiRef || transaction.upiId ? (
         <p className="font-mono text-xs text-[var(--muted-foreground)]">
           UPI{transaction.upiRef ? ` ${formatUpiRef(transaction.upiRef)}` : ""}{transaction.upiId ? ` · ${transaction.upiId}` : ""}

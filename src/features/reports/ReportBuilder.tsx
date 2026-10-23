@@ -6,6 +6,7 @@ import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { isoDate } from "@/src/core/budgets/period";
 import { fiscalYear } from "@/src/core/locale-format";
+import { GstSummaryCard } from "@/src/features/reports/GstSummaryCard";
 import { Button, PageContainer } from "@noirly-dev/ui";
 import { Label } from "@noirly-dev/ui";
 import { Select } from "@/src/components/Select";
@@ -168,6 +169,9 @@ export function ReportBuilder({ workspaceId, kind, fiscalYearStartMonth = 1 }: P
           {pending ? "Exporting…" : "Export"}
         </Button>
       </form>
+      <div className="mt-6">
+        <GstSummaryCard workspaceId={workspaceId} from={from} to={to} />
+      </div>
     </PageContainer>
   );
 }
