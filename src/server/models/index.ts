@@ -22,6 +22,7 @@ export { BudgetTemplate, type BudgetTemplateDocument } from "./BudgetTemplate";
 export { BudgetRevision, type BudgetRevisionDocument } from "./BudgetRevision";
 export { Scenario, type ScenarioDocument } from "./Scenario";
 export { TransactionView, type TransactionViewDocument } from "./TransactionView";
+export { InstallmentPlan, type InstallmentPlanDocument } from "./InstallmentPlan";
 export {
   WorkspaceInvite,
   type WorkspaceInviteDocument,

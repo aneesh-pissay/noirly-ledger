@@ -8,6 +8,7 @@ import type {
   ForecastBaselineResult,
   SavedScenario,
   SavedView,
+  InstallmentPlanSummary,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -189,6 +190,18 @@ export const api = {
   },
   bulkCreateTransactions(workspaceId: string, transactions: Array<Record<string, unknown>>) {
     return request<{ transactions: Transaction[] }>(`/api/workspaces/${workspaceId}/transactions/bulk-create`, { method: "POST", body: JSON.stringify({ transactions }) });
+  },
+  listInstallmentPlans(workspaceId: string) {
+    return request<{ plans: InstallmentPlanSummary[] }>(`/api/workspaces/${workspaceId}/installments`);
+  },
+  createInstallmentPlan(workspaceId: string, body: Record<string, unknown>) {
+    return request<{ plan: InstallmentPlanSummary }>(`/api/workspaces/${workspaceId}/installments`, { method: "POST", body: JSON.stringify(body) });
+  },
+  closeInstallmentPlan(planId: string, chargeMajor: string | null) {
+    return request<{ plan: InstallmentPlanSummary }>(`/api/installments/${planId}/close`, { method: "POST", body: JSON.stringify({ chargeMajor }) });
+  },
+  deleteInstallmentPlan(planId: string) {
+    return request<{ ok: boolean }>(`/api/installments/${planId}`, { method: "DELETE" });
   },
   listViews(workspaceId: string) {
     return request<{ views: SavedView[] }>(`/api/workspaces/${workspaceId}/views`);

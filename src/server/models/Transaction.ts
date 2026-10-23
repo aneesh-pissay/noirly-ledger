@@ -88,6 +88,9 @@ const transactionSchema = new Schema(
     merchant: { type: String, default: null },
     merchantKey: { type: String, default: null },
     projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null, index: true },
+    // EMI payments: the plan, and which payment (0 the processing fee, -1 paying off early).
+    installmentPlanId: { type: Schema.Types.ObjectId, ref: "InstallmentPlan", default: null, index: true },
+    installmentNumber: { type: Number, default: null },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

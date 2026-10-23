@@ -30,6 +30,8 @@ export const qk = {
   forecast: (workspaceId: string, basis: string) => ["forecast", workspaceId, basis] as const,
   scenarios: (workspaceId: string) => ["scenarios", workspaceId] as const,
   views: (workspaceId: string) => ["views", workspaceId] as const,
+  // Under "transactions" so anything that refreshes the list refreshes plans too.
+  installments: (workspaceId: string) => ["transactions", workspaceId, "installments"] as const,
   budgetTemplates: (workspaceId: string) => ["budget-templates", workspaceId] as const,
   // Under "budgets" so saving a budget refreshes the plan.
   monthPlan: (workspaceId: string, month: string) => ["budgets", workspaceId, "plan", month] as const,

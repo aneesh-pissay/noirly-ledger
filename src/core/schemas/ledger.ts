@@ -140,6 +140,21 @@ export const scenarioBodySchema = z.object({
   changes: z.array(scenarioChangeSchema).max(30),
 });
 
+export const installmentPlanBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  principalMajor: amountMajorSchema,
+  currency: currencyCode,
+  months: z.number().int().min(2).max(120),
+  annualRatePct: z.number().min(0).max(60).default(0),
+  taxOnInterestPct: z.number().min(0).max(50).default(0),
+  processingFeeMajor: amountMajorSchema.nullable().optional(),
+  firstDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  accountId: z.string().min(1).nullable().optional(),
+  categoryId: z.string().min(1).nullable().optional(),
+});
+
+export const closeInstallmentBodySchema = z.object({ chargeMajor: amountMajorSchema.nullable().optional() });
+
 export const bulkChangeBodySchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(MAX_BULK),
   action: z.discriminatedUnion("kind", [

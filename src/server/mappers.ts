@@ -86,6 +86,8 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     // Filled in where it's listed; see withRefunded.
     refundedMinor: 0,
     clearing: clearingOf(doc.clearing),
+    installmentPlanId: doc.installmentPlanId ? doc.installmentPlanId.toString() : null,
+    installmentNumber: doc.installmentNumber ?? null,
     tags: doc.tags ?? [],
     merchant: doc.merchant ?? null,
     projectId: doc.projectId ? doc.projectId.toString() : null,

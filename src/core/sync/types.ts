@@ -93,6 +93,9 @@ export type Transaction = {
   refundedMinor: MoneyMinor;
   /** Against the bank: pending, cleared, or reconciled to a statement. */
   clearing: Clearing;
+  /** EMI payments: the plan and which payment (0 the processing fee, -1 paying off early). */
+  installmentPlanId: string | null;
+  installmentNumber: number | null;
   /** Split across categories; empty when it isn't, and then categoryId applies. */
   splits: SplitLine[];
   tags: string[];
@@ -379,6 +382,30 @@ export type ForecastBaselineResult = {
   /** Each top-level category's monthly spending and where it came from. */
   lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; source: "recent" | "budget" }>;
   missingRates: string[];
+};
+
+export type InstallmentPlanSummary = {
+  id: string;
+  name: string;
+  principalMinor: MoneyMinor;
+  currency: string;
+  months: number;
+  annualRatePct: number;
+  taxOnInterestPct: number;
+  processingFeeMinor: MoneyMinor;
+  firstDate: string;
+  accountId: string | null;
+  categoryId: string | null;
+  closed: boolean;
+  paidCount: number;
+  monthlyMinor: MoneyMinor;
+  /** The installments still to come. */
+  leftToPayMinor: MoneyMinor;
+  principalLeftMinor: MoneyMinor;
+  nextDate: string | null;
+  /** Interest, tax and fee over the whole plan, and everything paid. */
+  costMinor: MoneyMinor;
+  totalMinor: MoneyMinor;
 };
 
 export type SavedView = { id: string; name: string; filters: ViewFilters };

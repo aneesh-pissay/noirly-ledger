@@ -16,6 +16,7 @@ import { CLEARING_LABEL } from "@/src/core/clearing";
 import { filtersFromParams, filtersToQuery } from "@/src/core/search";
 import { BulkBar } from "@/src/features/transactions/BulkBar";
 import { BulkCreateDialog } from "@/src/features/transactions/BulkCreateDialog";
+import { EmiPanel } from "@/src/features/installments/EmiPanel";
 import { FiltersBar } from "@/src/features/transactions/FiltersBar";
 import type { TransactionType } from "@/src/core/models/enums";
 import { categoryTree } from "@/src/core/categories";
@@ -163,6 +164,11 @@ export function TransactionScreen({
         </p>
       ) : null}
       <RefundDialog workspaceId={workspaceId} expense={refunding} onClose={() => setRefunding(null)} />
+      {recurringOnly ? (
+        <div className="mt-6">
+          <EmiPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
+        </div>
+      ) : null}
 
       <div className="mt-6 overflow-hidden rounded-xl border border-[var(--hairline)]">
         <div className="grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
