@@ -364,6 +364,9 @@ export type DashboardSummary = {
     budget: Budget;
     spentMinor: number;
     remainingMinor: number;
+    /** The current period's first and last days; a yearly budget runs over the financial year. */
+    periodFrom: string;
+    periodTo: string;
   }>;
 };
 

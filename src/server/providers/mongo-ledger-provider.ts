@@ -1187,7 +1187,7 @@ export function createMongoLedgerProvider(
             const window = periodWindow(budget.period, new Date(), {
               start: budget.periodStart ? isoDate(budget.periodStart) : null,
               end: budget.periodEnd ? isoDate(budget.periodEnd) : null,
-            });
+            }, workspace.fiscalYearStartMonth ?? defaultFiscalStart(workspace.baseCurrency));
             const spentMinor = await spentInCategories(
               { workspaceId: workspace._id, isPosted: true, deletedAt: null, date: { $gte: window.from, $lte: window.to } },
               await budgetCategoryIds(budget.categoryId),
@@ -1196,6 +1196,8 @@ export function createMongoLedgerProvider(
               budget: mapBudget(budget),
               spentMinor,
               remainingMinor: budget.limitAmountMinor - spentMinor,
+              periodFrom: isoDate(window.from),
+              periodTo: isoDate(window.to),
             };
           }),
         );

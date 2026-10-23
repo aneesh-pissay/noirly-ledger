@@ -17,7 +17,7 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
   const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState("");
   const [limitMajor, setLimitMajor] = useState("");
-  const [period, setPeriod] = useState<"monthly" | "weekly">("monthly");
+  const [period, setPeriod] = useState<"monthly" | "weekly" | "yearly">("monthly");
 
   const categories = useQuery({
     queryKey: qk.categories(workspaceId),
@@ -75,10 +75,11 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
           <Select
             id="b-period"
             value={period}
-            onChange={(e) => setPeriod(e.target.value as "monthly" | "weekly")}
+            onChange={(e) => setPeriod(e.target.value as "monthly" | "weekly" | "yearly")}
           >
             <option value="monthly">Monthly</option>
             <option value="weekly">Weekly</option>
+            <option value="yearly">Yearly (financial year)</option>
           </Select>
         </div>
         <div>
@@ -106,7 +107,9 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
             <li key={row.budget.id} className="surface grain rounded-[var(--r-lg)] p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">{categoryName(row.budget.categoryId)}</p>
-                <p className="font-mono text-xs uppercase text-[var(--muted-foreground)]">{row.budget.period}</p>
+                <p className="font-mono text-xs text-[var(--muted-foreground)]">
+                  <span className="uppercase">{row.budget.period}</span> · {row.periodFrom} to {row.periodTo}
+                </p>
               </div>
               <div className="mt-3">
                 <ProgressBar value={ratio} tone={over ? "negative" : "accent"} />

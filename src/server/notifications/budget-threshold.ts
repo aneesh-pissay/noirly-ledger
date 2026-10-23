@@ -5,11 +5,13 @@ import { withDb } from "@/src/server/db/mongodb";
 import {
   Budget,
   Category,
+  Workspace,
   WorkspaceMember,
 } from "@/src/server/models";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { spentInCategories } from "@/src/server/splits";
 import { budgetCategoryIds } from "@/src/server/categories/tree";
+import { defaultFiscalStart } from "@/src/core/locale-format";
 
 export async function maybeNotifyBudgetThreshold(input: {
   workspaceId: string;
@@ -35,11 +37,13 @@ export async function maybeNotifyBudgetThreshold(input: {
     const userIds = members.map((m) => m.userId.toString());
     if (userIds.length === 0) return;
 
+    const workspace = await Workspace.findById(new Types.ObjectId(input.workspaceId)).select("baseCurrency fiscalYearStartMonth").lean();
+    const fiscalStart = workspace?.fiscalYearStartMonth ?? defaultFiscalStart(workspace?.baseCurrency ?? "");
     for (const budget of budgets) {
       const window = periodWindow(budget.period, new Date(), {
         start: budget.periodStart ? isoDate(budget.periodStart) : null,
         end: budget.periodEnd ? isoDate(budget.periodEnd) : null,
-      });
+      }, fiscalStart);
       const nextSpent = await spentInCategories(
         {
           workspaceId: new Types.ObjectId(input.workspaceId),
