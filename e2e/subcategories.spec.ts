@@ -75,7 +75,7 @@ test.describe("subcategories", () => {
     await dialog.getByLabel("Amount").fill("42");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText("Home › Electricity")).toBeVisible();
+    await expect(page.locator("div.absolute", { hasText: "Home › Electricity" })).toBeVisible();
 
     // Moving it back to the top level.
     await page.goto("/categories");

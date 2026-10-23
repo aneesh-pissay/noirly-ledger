@@ -76,7 +76,7 @@ test.describe("personal, household and business workspaces", () => {
     await dialog.getByLabel("Amount", { exact: true }).fill("1250");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByText("Groceries").first()).toBeVisible();
+    await expect(page.locator("div.absolute", { hasText: "Groceries" })).toBeVisible();
     const list = async (id: string) => ((await (await owner.api.get(`/api/workspaces/${id}/transactions`)).json()) as { items: unknown[] }).items.length;
     expect(await list(homeId)).toBe(1);
     expect(await list(await personalWorkspaceId(owner))).toBe(0);

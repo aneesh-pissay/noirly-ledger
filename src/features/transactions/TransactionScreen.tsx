@@ -13,6 +13,9 @@ import { useUIStore } from "@/src/stores/ui-store";
 import type { Transaction } from "@/src/core/sync/types";
 import { RefundDialog } from "@/src/features/transactions/RefundDialog";
 import { CLEARING_LABEL } from "@/src/core/clearing";
+import { filtersFromParams } from "@/src/core/search";
+import { FiltersBar } from "@/src/features/transactions/FiltersBar";
+import type { TransactionType } from "@/src/core/models/enums";
 import { categoryTree } from "@/src/core/categories";
 
 type Props = {
@@ -36,28 +39,35 @@ export function TransactionScreen({
     queryKey: qk.categories(workspaceId),
     queryFn: () => api.listCategories(workspaceId),
   });
-  // /transactions?account=…, ?tag=…, ?merchant=… or ?project=… lists just those (linked from Accounts, Projects and the rows here).
+  // The list's search and filters live in the address (?q=…&account=…), so links from Accounts, Projects and the rows here, and saved views, all just open it.
   const search = useSearchParams();
-  const accountFilter = search.get("account") ?? undefined;
-  const tagFilter = search.get("tag") ?? undefined;
-  const merchantFilter = search.get("merchant") ?? undefined;
-  const projectFilter = search.get("project") ?? undefined;
+  const filters = filtersFromParams(search);
+  const accountFilter = filters.account;
+  const tagFilter = filters.tag;
+  const merchantFilter = filters.merchant;
+  const projectFilter = filters.project;
+  const listQuery = {
+    accountId: accountFilter,
+    tag: tagFilter,
+    merchant: merchantFilter,
+    projectId: projectFilter,
+    categoryId: filters.category,
+    q: filters.q,
+    type: filters.type as TransactionType | undefined,
+    from: filters.from,
+    to: filters.to,
+    min: filters.min,
+    max: filters.max,
+    clearing: filters.clearing,
+  };
   const projects = useQuery({ queryKey: qk.projects(workspaceId), queryFn: () => api.listProjects(workspaceId) });
   const accounts = useQuery({
     queryKey: qk.accounts(workspaceId),
     queryFn: () => api.listAccounts(workspaceId),
   });
   const txns = useQuery({
-    queryKey: qk.transactions(workspaceId, { recurring: recurringOnly, accountId: accountFilter, tag: tagFilter, merchant: merchantFilter, projectId: projectFilter }),
-    queryFn: () =>
-      api.listTransactions(workspaceId, {
-        recurring: recurringOnly,
-        accountId: accountFilter,
-        tag: tagFilter,
-        merchant: merchantFilter,
-        projectId: projectFilter,
-        limit: 200,
-      }),
+    queryKey: qk.transactions(workspaceId, { recurring: recurringOnly, ...listQuery }),
+    queryFn: () => api.listTransactions(workspaceId, { recurring: recurringOnly, ...listQuery, limit: 200 }),
   });
   const accountName = (id: string | null) =>
     id ? accounts.data?.accounts.find((a) => a.id === id)?.name ?? "Account" : "—";
@@ -118,6 +128,9 @@ export function TransactionScreen({
         </div>
         <Button onClick={() => setOpen(true)}>Add</Button>
       </div>
+      {!recurringOnly ? (
+        <FiltersBar workspaceId={workspaceId} basePath={base} filters={filters} categories={categories.data?.categories ?? []} />
+      ) : null}
       {remove.error || setClearing.error ? (
         <p role="alert" className="mt-3 text-sm text-[var(--balance-negative)]">
           {(remove.error ?? setClearing.error)?.message ?? "Couldn't save"}
@@ -139,7 +152,7 @@ export function TransactionScreen({
         <div ref={parentRef} className="max-h-[32rem] overflow-auto">
           {items.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-[var(--muted-foreground)]">
-              No transactions yet.
+              {Object.keys(filters).length ? "Nothing matches this search." : "No transactions yet."}
             </p>
           ) : (
             <div

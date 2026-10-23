@@ -1,6 +1,11 @@
 export type TxFilters = {
   categoryId?: string;
   accountId?: string;
+  q?: string;
+  min?: string;
+  max?: string;
+  clearing?: string;
+  type?: string;
   tag?: string;
   merchant?: string;
   projectId?: string;
@@ -24,6 +29,7 @@ export const qk = {
   budgetRevisions: (workspaceId: string) => ["budgets", workspaceId, "revisions"] as const,
   forecast: (workspaceId: string, basis: string) => ["forecast", workspaceId, basis] as const,
   scenarios: (workspaceId: string) => ["scenarios", workspaceId] as const,
+  views: (workspaceId: string) => ["views", workspaceId] as const,
   budgetTemplates: (workspaceId: string) => ["budget-templates", workspaceId] as const,
   // Under "budgets" so saving a budget refreshes the plan.
   monthPlan: (workspaceId: string, month: string) => ["budgets", workspaceId, "plan", month] as const,

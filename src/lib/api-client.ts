@@ -7,6 +7,7 @@ import type {
   BudgetRevisionRecord,
   ForecastBaselineResult,
   SavedScenario,
+  SavedView,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -110,6 +111,10 @@ export const api = {
       tag?: string;
       merchant?: string;
       projectId?: string;
+      q?: string;
+      min?: string;
+      max?: string;
+      clearing?: string;
       from?: string;
       to?: string;
       type?: TransactionType;
@@ -124,6 +129,10 @@ export const api = {
     if (query.tag) params.set("tag", query.tag);
     if (query.merchant) params.set("merchant", query.merchant);
     if (query.projectId) params.set("projectId", query.projectId);
+    if (query.q) params.set("q", query.q);
+    if (query.min) params.set("min", query.min);
+    if (query.max) params.set("max", query.max);
+    if (query.clearing) params.set("clearing", query.clearing);
     if (query.from) params.set("from", query.from);
     if (query.to) params.set("to", query.to);
     if (query.type) params.set("type", query.type);
@@ -173,6 +182,15 @@ export const api = {
   },
   restoreBudgetRevision(revisionId: string) {
     return request<{ limitMinor: number }>(`/api/budget-revisions/${revisionId}/restore`, { method: "POST", body: "{}" });
+  },
+  listViews(workspaceId: string) {
+    return request<{ views: SavedView[] }>(`/api/workspaces/${workspaceId}/views`);
+  },
+  saveView(workspaceId: string, body: { name: string; filters: Record<string, string> }) {
+    return request<{ view: SavedView }>(`/api/workspaces/${workspaceId}/views`, { method: "POST", body: JSON.stringify(body) });
+  },
+  deleteView(viewId: string) {
+    return request<{ ok: boolean }>(`/api/views/${viewId}`, { method: "DELETE" });
   },
   getForecastBaseline(workspaceId: string, basis: "recent" | "budgets") {
     return request<{ forecast: ForecastBaselineResult }>(`/api/workspaces/${workspaceId}/forecast?basis=${basis}`);

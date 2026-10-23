@@ -14,6 +14,7 @@ import type { RolloverMode } from "@/src/core/budgets/rollover";
 import type { RevisionReason } from "@/src/core/budgets/revisions";
 import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
+import type { ViewFilters } from "@/src/core/search";
 
 export type {
   ApprovalStatus,
@@ -287,6 +288,11 @@ export type ListTransactionsQuery = {
   /** A merchant's name, matched however it's spelled. */
   merchant?: string;
   projectId?: string;
+  /** Text to find in notes, merchants, tags and category names, or an amount. */
+  q?: string;
+  minAmountMinor?: number;
+  maxAmountMinor?: number;
+  clearing?: Clearing;
   from?: string;
   to?: string;
   recurringOnly?: boolean;
@@ -374,6 +380,8 @@ export type ForecastBaselineResult = {
   lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; source: "recent" | "budget" }>;
   missingRates: string[];
 };
+
+export type SavedView = { id: string; name: string; filters: ViewFilters };
 
 export type SavedScenario = { id: string; name: string; changes: ScenarioChange[]; updatedAt: string };
 

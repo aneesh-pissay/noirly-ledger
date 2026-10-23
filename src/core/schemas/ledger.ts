@@ -139,6 +139,11 @@ export const scenarioBodySchema = z.object({
   changes: z.array(scenarioChangeSchema).max(30),
 });
 
+export const saveViewBodySchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  filters: z.record(z.string(), z.string().max(120)),
+});
+
 export const budgetMoveBodySchema = z.object({
   fromBudgetId: z.string().min(1),
   toBudgetId: z.string().min(1),

@@ -2,6 +2,17 @@ import { getLedgerProvider, jsonError, jsonOk, assertObjectId } from "@/src/serv
 import { createTransactionBodySchema } from "@/src/core/schemas/ledger";
 import { parseMajorToMinor } from "@/src/core/money";
 import type { TransactionType } from "@/src/core/models/enums";
+import { CLEARING_STATES, type Clearing } from "@/src/core/clearing";
+
+/** An amount filter as minor units; anything unreadable is ignored. */
+function minor(value: string | null) {
+  if (!value?.trim()) return undefined;
+  try {
+    return parseMajorToMinor(value.trim());
+  } catch {
+    return undefined;
+  }
+}
 
 export async function GET(
   request: Request,
@@ -20,6 +31,10 @@ export async function GET(
       tag: url.searchParams.get("tag") ?? undefined,
       merchant: url.searchParams.get("merchant") ?? undefined,
       projectId: url.searchParams.get("projectId") ?? undefined,
+      q: url.searchParams.get("q") ?? undefined,
+      minAmountMinor: minor(url.searchParams.get("min")),
+      maxAmountMinor: minor(url.searchParams.get("max")),
+      clearing: (CLEARING_STATES as readonly string[]).includes(url.searchParams.get("clearing") ?? "") ? (url.searchParams.get("clearing") as Clearing) : undefined,
       from: url.searchParams.get("from") ?? undefined,
       to: url.searchParams.get("to") ?? undefined,
       type: (url.searchParams.get("type") as TransactionType) || undefined,

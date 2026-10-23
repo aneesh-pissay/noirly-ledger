@@ -79,6 +79,7 @@ import { canRollOver } from "@/src/core/budgets/rollover";
 import { labelFields } from "@/src/server/labels";
 import { assertTransactionProject } from "@/src/server/projects";
 import { merchantKey } from "@/src/core/labels";
+import { escapeRegex, parseSearch } from "@/src/core/search";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
 
@@ -327,6 +328,30 @@ export function createMongoLedgerProvider(
         if (query.merchant) filter.merchantKey = merchantKey(query.merchant);
         if (query.projectId) filter.projectId = oid(query.projectId);
         if (query.accountId) all.push({ $or: [{ accountId: oid(query.accountId) }, { toAccountId: oid(query.accountId) }] });
+        // One box searches notes, merchants, tags and category names, and amounts when it's a number.
+        const search = parseSearch(query.q);
+        if (search.text) {
+          const pattern = new RegExp(escapeRegex(search.text), "i");
+          const matching = await CategoryModel.find({ workspaceId: oid(query.workspaceId), name: pattern }).select("_id").lean();
+          const ids = matching.map((c) => c._id);
+          all.push({
+            $or: [
+              { note: pattern },
+              { merchant: pattern },
+              { tags: search.text.toLowerCase().replace(/^#+/, "") },
+              ...(ids.length ? [{ categoryId: { $in: ids } }, { "splits.categoryId": { $in: ids } }] : []),
+              ...(search.amountMinor != null ? [{ amountMinor: search.amountMinor }, { toAmountMinor: search.amountMinor }] : []),
+            ],
+          });
+        }
+        if (query.minAmountMinor != null || query.maxAmountMinor != null) {
+          filter.amountMinor = {
+            ...(query.minAmountMinor != null ? { $gte: query.minAmountMinor } : {}),
+            ...(query.maxAmountMinor != null ? { $lte: query.maxAmountMinor } : {}),
+          };
+        }
+        // Older rows have no clearing state; they count as cleared.
+        if (query.clearing) filter.clearing = query.clearing === "cleared" ? { $in: ["cleared", null] } : query.clearing;
         if (all.length) filter.$and = all;
         if (query.type) filter.type = query.type;
         if (query.recurringOnly) {

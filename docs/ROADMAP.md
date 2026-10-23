@@ -18,7 +18,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | --- | --- |
 | 1. Accounts and the money model | 10 / 10 |
 | 2. Budgeting | 9 / 9 |
-| 3. Transactions and imports | 0 / 11 |
+| 3. Transactions and imports | 1 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
 | 5. Team expense management | 0 / 10 |
 | 6. Reports and analytics | 0 / 9 |
@@ -79,7 +79,7 @@ _Needs Phase 1 subcategories and splits._
 
 ## Phase 3 — Transactions and imports
 
-- [ ] Search across notes, merchants and amounts, with saved views (M)
+- [x] Search across notes, merchants and amounts, with saved views (M) — done 2026-10-23
 - [ ] Bulk create, edit and delete (M)
 - [ ] Installment transactions (EMI purchases split over months) (M)
 - [ ] Several attachments per transaction, comments, and a change history (M)
