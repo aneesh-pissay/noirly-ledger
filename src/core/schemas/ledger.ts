@@ -119,6 +119,25 @@ export const upsertBudgetBodySchema = z.object({
 
 export const saveBudgetTemplateBodySchema = z.object({ name: z.string().trim().min(1).max(80) });
 
+const monthIndex = z.number().int().min(1).max(60);
+const signedMinor = z.number().int().min(-1_000_000_000_00).max(1_000_000_000_00);
+const changeLabel = z.string().trim().max(80).optional();
+
+/** One what-if change; amounts are base-currency minor units, positive one-off or repeating amounts are money in. */
+export const scenarioChangeSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("income"), amountMinor: signedMinor.optional(), pct: z.number().min(-100).max(1000).optional(), fromMonth: monthIndex.optional(), label: changeLabel }),
+  z.object({ kind: z.literal("category"), categoryId: z.string().min(1).max(40), amountMinor: signedMinor.optional(), pct: z.number().min(-100).max(1000).optional(), fromMonth: monthIndex.optional(), label: changeLabel }),
+  z.object({ kind: z.literal("one_off"), amountMinor: signedMinor, month: monthIndex, label: changeLabel }),
+  z.object({ kind: z.literal("recurring"), amountMinor: signedMinor, fromMonth: monthIndex, months: z.number().int().min(1).max(60).nullable().optional(), label: changeLabel }),
+]).refine((change) => (change.kind !== "income" && change.kind !== "category") || change.pct == null || change.amountMinor == null, {
+  message: "Change it by an amount or a percent, not both",
+});
+
+export const scenarioBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  changes: z.array(scenarioChangeSchema).max(30),
+});
+
 export const budgetMoveBodySchema = z.object({
   fromBudgetId: z.string().min(1),
   toBudgetId: z.string().min(1),

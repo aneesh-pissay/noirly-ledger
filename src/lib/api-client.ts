@@ -5,6 +5,8 @@ import type {
   BudgetTemplateSummary,
   BudgetImpact,
   BudgetRevisionRecord,
+  ForecastBaselineResult,
+  SavedScenario,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -29,6 +31,7 @@ import type {
   WorkspaceWithRole,
 } from "@/src/core/sync/types";
 import type { NumberFormat } from "@/src/core/locale-format";
+import type { ScenarioChange } from "@/src/core/forecast";
 
 type ApiErrorBody = { error?: string; message?: string };
 
@@ -169,6 +172,21 @@ export const api = {
   },
   restoreBudgetRevision(revisionId: string) {
     return request<{ limitMinor: number }>(`/api/budget-revisions/${revisionId}/restore`, { method: "POST", body: "{}" });
+  },
+  getForecastBaseline(workspaceId: string, basis: "recent" | "budgets") {
+    return request<{ forecast: ForecastBaselineResult }>(`/api/workspaces/${workspaceId}/forecast?basis=${basis}`);
+  },
+  listScenarios(workspaceId: string) {
+    return request<{ scenarios: SavedScenario[] }>(`/api/workspaces/${workspaceId}/scenarios`);
+  },
+  createScenario(workspaceId: string, body: { name: string; changes: ScenarioChange[] }) {
+    return request<{ scenario: SavedScenario }>(`/api/workspaces/${workspaceId}/scenarios`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateScenario(scenarioId: string, body: { name: string; changes: ScenarioChange[] }) {
+    return request<{ scenario: SavedScenario }>(`/api/scenarios/${scenarioId}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteScenario(scenarioId: string) {
+    return request<{ ok: boolean }>(`/api/scenarios/${scenarioId}`, { method: "DELETE" });
   },
   listBudgetTemplates(workspaceId: string) {
     return request<{ templates: BudgetTemplateSummary[] }>(`/api/workspaces/${workspaceId}/budget-templates`);

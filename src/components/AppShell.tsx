@@ -8,6 +8,7 @@ import {
   Briefcase,
   FolderKanban,
   Goal,
+  LineChart,
   LayoutDashboard,
   Mail,
   Plus,
@@ -130,6 +131,7 @@ export function AppShell({ user, workspaces, children }: Props) {
         label: "Planning",
         items: [
           { href: "/goals", label: "Goals", icon: Goal },
+          { href: "/forecast", label: "Forecast", icon: LineChart },
           { href: "/categories", label: "Categories", icon: Tags },
           { href: "/projects", label: "Projects", icon: Briefcase },
           { href: "/reports", label: "Reports", icon: BarChart3 },

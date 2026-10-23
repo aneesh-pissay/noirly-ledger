@@ -12,6 +12,7 @@ import type { Clearing } from "@/src/core/clearing";
 import type { SplitLine } from "@/src/core/splits";
 import type { RolloverMode } from "@/src/core/budgets/rollover";
 import type { RevisionReason } from "@/src/core/budgets/revisions";
+import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
 
 export type {
   ApprovalStatus,
@@ -354,6 +355,23 @@ export type BudgetRevisionRecord = {
   otherBudgetId: string | null;
   createdAt: string;
 };
+
+/** What a typical month looks like, for forecasts; see src/core/forecast.ts. */
+export type ForecastBaselineResult = {
+  basis: "recent" | "budgets";
+  baseCurrency: string;
+  lookbackMonths: number;
+  /** The full months averaged over. */
+  from: string;
+  to: string;
+  today: string;
+  baseline: ForecastBaseline;
+  /** Each top-level category's monthly spending and where it came from. */
+  lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; source: "recent" | "budget" }>;
+  missingRates: string[];
+};
+
+export type SavedScenario = { id: string; name: string; changes: ScenarioChange[]; updatedAt: string };
 
 /** What an expense being entered would do to one budget. */
 export type BudgetImpact = {
