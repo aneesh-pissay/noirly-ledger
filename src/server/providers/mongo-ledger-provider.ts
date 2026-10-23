@@ -233,6 +233,7 @@ export function createMongoLedgerProvider(
           slug,
           ownerUserId: oid(ctx.userId),
           baseCurrency: input.baseCurrency.toUpperCase(),
+          purpose: input.purpose ?? "team",
         });
 
         await WorkspaceMember.create({
@@ -240,7 +241,7 @@ export function createMongoLedgerProvider(
           userId: oid(ctx.userId),
           role: "owner",
         });
-        await seedSystemCategories(workspace._id);
+        await seedSystemCategories(workspace._id, input.purpose ?? "team");
 
         return mapWorkspace(workspace);
       });

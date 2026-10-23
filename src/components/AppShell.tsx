@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, type ReactNode } from "react";
 import {
   BarChart3,
+  CheckCheck,
+  ClipboardList,
   Briefcase,
   FolderKanban,
   Goal,
@@ -36,6 +38,7 @@ import { TransactionComposer } from "@/src/features/transactions/TransactionComp
 import { NotificationBell } from "@/src/features/notifications/NotificationBell";
 import { ThemeControls } from "@/src/components/ThemeControls";
 import { NumberFormatProvider } from "@/src/components/NumberFormatProvider";
+import { PURPOSE_LABEL, PURPOSE_SECTIONS, poolsLabel, type WorkspacePurpose, type WorkspaceSection } from "@/src/core/workspace-purpose";
 import type { NumberFormat } from "@/src/core/locale-format";
 import { useUIStore, useWorkspaceStore } from "@/src/stores/ui-store";
 import type { WorkspaceWithRole } from "@/src/core/sync/types";
@@ -77,6 +80,7 @@ export function AppShell({ user, workspaces, children }: Props) {
     pathname !== "/login";
 
   const teamRole = teams.find((w) => w.id === activeWorkspaceId)?.role ?? "member";
+  const composerWorkspace = (pathname.startsWith("/w/") ? teams.find((w) => w.id === activeWorkspaceId) : undefined) ?? personal;
 
   useEffect(() => {
     if (activeWorkspaceId) {
@@ -93,13 +97,19 @@ export function AppShell({ user, workspaces, children }: Props) {
   const groups: AppNavGroup[] = useMemo(() => {
     if (pathname.startsWith("/w/") && activeWorkspaceId) {
       const base = `/w/${activeWorkspaceId}`;
-      const money: AppNavItem[] = [
-        { href: `${base}/pools`, label: "Budget pools", icon: FolderKanban },
-        { href: `${base}/expenses`, label: "Expenses", icon: Receipt },
-      ];
-      if (can(teamRole, "expense.decide")) {
-        money.push({ href: `${base}/approvals`, label: "Approvals", icon: Wallet });
-      }
+      // What the workspace is for decides which pages it has.
+      const purpose = (teams.find((w) => w.id === activeWorkspaceId)?.purpose ?? "team") as WorkspacePurpose;
+      const sections: Record<WorkspaceSection, AppNavItem> = {
+        transactions: { href: `${base}/transactions`, label: "Transactions", icon: Receipt },
+        accounts: { href: `${base}/accounts`, label: "Accounts", icon: Landmark },
+        budgets: { href: `${base}/budgets`, label: "Budgets", icon: Wallet },
+        pools: { href: `${base}/pools`, label: poolsLabel(purpose), icon: FolderKanban },
+        expenses: { href: `${base}/expenses`, label: "Expenses", icon: ClipboardList },
+        approvals: { href: `${base}/approvals`, label: "Approvals", icon: CheckCheck },
+      };
+      const money: AppNavItem[] = PURPOSE_SECTIONS[purpose]
+        .filter((section) => section !== "approvals" || can(teamRole, "expense.decide"))
+        .map((section) => sections[section]);
 
       return [
         { items: [{ href: base, label: "Dashboard", icon: LayoutDashboard, match: "exact" }] },
@@ -139,7 +149,7 @@ export function AppShell({ user, workspaces, children }: Props) {
       },
       { label: "Workspace", items: [{ href: "/settings", label: "Settings", icon: Settings }] },
     ];
-  }, [activeWorkspaceId, pathname, teamRole]);
+  }, [activeWorkspaceId, pathname, teamRole, teams]);
 
   /**
    * Breadcrumb from the nav definition rather than from the URL, so a segment
@@ -199,7 +209,7 @@ export function AppShell({ user, workspaces, children }: Props) {
                     className={workspaceLinkClass(active)}
                   >
                     <span className="truncate">{workspace.name}</span>
-                    <span className="meta shrink-0 text-[0.5625rem]">team</span>
+                    <span className="meta shrink-0 text-[0.5625rem]">{PURPOSE_LABEL[(workspace.purpose === "personal" ? "team" : workspace.purpose)].toLowerCase()}</span>
                   </Link>
                 );
               })}
@@ -242,10 +252,12 @@ export function AppShell({ user, workspaces, children }: Props) {
         <NumberFormatProvider value={user.numberFormat}>{children}</NumberFormatProvider>
       </UIShell>
       <CommandPalette workspaces={workspaces} />
-      {personal ? (
+      {/* Adds to the workspace being looked at: a shared one under /w/, otherwise the personal one. */}
+      {composerWorkspace ? (
         <TransactionComposer
-          workspaceId={personal.id}
-          baseCurrency={personal.baseCurrency}
+          key={composerWorkspace.id}
+          workspaceId={composerWorkspace.id}
+          baseCurrency={composerWorkspace.baseCurrency}
         />
       ) : null}
     </>

@@ -32,6 +32,7 @@ import type {
 } from "@/src/core/sync/types";
 import type { NumberFormat } from "@/src/core/locale-format";
 import type { ScenarioChange } from "@/src/core/forecast";
+import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 
 type ApiErrorBody = { error?: string; message?: string };
 
@@ -69,10 +70,10 @@ export const api = {
   updateMe(body: { numberFormat: NumberFormat }) {
     return request<{ numberFormat: NumberFormat }>("/api/me", { method: "PATCH", body: JSON.stringify(body) });
   },
-  updateWorkspaceSettings(workspaceId: string, body: { fiscalYearStartMonth: number }) {
+  updateWorkspaceSettings(workspaceId: string, body: { fiscalYearStartMonth?: number; purpose?: WorkspacePurpose }) {
     return request<{ workspace: Workspace }>(`/api/workspaces/${workspaceId}/settings`, { method: "PATCH", body: JSON.stringify(body) });
   },
-  createWorkspace(input: { name: string; baseCurrency?: string }) {
+  createWorkspace(input: { name: string; baseCurrency?: string; purpose?: WorkspacePurpose }) {
     return request<{ workspace: Workspace }>("/api/workspaces", {
       method: "POST",
       body: JSON.stringify(input),

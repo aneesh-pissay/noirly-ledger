@@ -7,6 +7,7 @@ import {
   type Types,
 } from "mongoose";
 import { WORKSPACE_KINDS } from "@/src/core/models/enums";
+import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
 
 const workspaceSchema = new Schema(
   {
@@ -33,6 +34,8 @@ const workspaceSchema = new Schema(
     },
     // Month (1–12) the financial year starts in; unset means the default for the base currency (see src/core/locale-format.ts).
     fiscalYearStartMonth: { type: Number, min: 1, max: 12, default: null },
+    // Shared workspaces: what it's for, which shapes its pages (see src/core/workspace-purpose.ts).
+    purpose: { type: String, enum: WORKSPACE_PURPOSES, default: "team" },
     // When envelope budgeting started; null until it's turned on (see src/server/envelopes.ts).
     envelopesSince: { type: Date, default: null },
   },

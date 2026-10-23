@@ -8,6 +8,7 @@ import { ACCOUNT_KINDS } from "@/src/core/accounts";
 import { CLEARING_STATES } from "@/src/core/clearing";
 import { NUMBER_FORMATS } from "@/src/core/locale-format";
 import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
+import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
 
 export const currencyCode = z
   .string()
@@ -228,9 +229,13 @@ export const updateProjectBodySchema = createProjectBodySchema
   .extend({ archived: z.boolean().optional() })
   .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
 
-export const workspaceSettingsBodySchema = z.object({
-  fiscalYearStartMonth: z.number().int().min(1).max(12),
-});
+export const workspaceSettingsBodySchema = z
+  .object({
+    fiscalYearStartMonth: z.number().int().min(1).max(12).optional(),
+    /** Shared workspaces only. */
+    purpose: z.enum(WORKSPACE_PURPOSES).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: "At least one field is required" });
 
 export const meSettingsBodySchema = z.object({
   numberFormat: z.enum(NUMBER_FORMATS),

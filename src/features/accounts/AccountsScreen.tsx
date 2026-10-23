@@ -16,10 +16,15 @@ import { Select } from "@/src/components/Select";
 import { NetWorthPanel } from "@/src/features/accounts/NetWorthPanel";
 import { ProjectionPanel } from "@/src/features/accounts/ProjectionPanel";
 
-type Props = { workspaceId: string; baseCurrency: string };
+type Props = {
+  workspaceId: string;
+  baseCurrency: string;
+  /** The workspace's transaction list, for each account's link. */
+  transactionsPath?: string;
+};
 
 /** /accounts — where your money is kept or owed, with each one's balance. */
-export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
+export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "/transactions" }: Props) {
   const queryClient = useQueryClient();
   const { amount } = useMoneyFormat();
   const accounts = useQuery({ queryKey: qk.accounts(workspaceId), queryFn: () => api.listAccounts(workspaceId) });
@@ -78,7 +83,7 @@ export function AccountsScreen({ workspaceId, baseCurrency }: Props) {
         <p className="truncate text-sm font-medium">{account.name}</p>
         <p className="text-xs text-[var(--muted-foreground)]">
           {ACCOUNT_KIND_LABEL[account.kind]}{account.institution ? ` · ${account.institution}` : ""} ·{" "}
-          <Link href={`/transactions?account=${account.id}`} className="underline-offset-2 hover:underline">
+          <Link href={`${transactionsPath}?account=${account.id}`} className="underline-offset-2 hover:underline">
             {account.transactionCount} transaction{account.transactionCount === 1 ? "" : "s"}
           </Link>
           {account.scheduledCount ? ` · ${account.scheduledCount} scheduled` : ""}

@@ -1,5 +1,6 @@
 import { clearingOf } from "@/src/core/clearing";
 import { defaultFiscalStart } from "@/src/core/locale-format";
+import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { RolloverMode } from "@/src/core/budgets/rollover";
 import type {
   ApprovalRequest,
@@ -40,6 +41,7 @@ export function mapWorkspace(doc: WorkspaceDocument): Workspace {
   return {
     id: doc._id.toString(),
     kind: doc.kind,
+    purpose: doc.kind === "personal" ? "personal" : ((doc.purpose ?? "team") as WorkspacePurpose),
     name: doc.name,
     slug: doc.slug,
     ownerUserId: doc.ownerUserId.toString(),

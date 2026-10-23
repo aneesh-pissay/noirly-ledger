@@ -17,7 +17,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | Phase | Done |
 | --- | --- |
 | 1. Accounts and the money model | 10 / 10 |
-| 2. Budgeting | 8 / 9 |
+| 2. Budgeting | 9 / 9 |
 | 3. Transactions and imports | 0 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
 | 5. Team expense management | 0 / 10 |
@@ -75,7 +75,7 @@ _Needs Phase 1 subcategories and splits._
 - [x] Real-time overspending warnings as you enter a transaction (S) — done 2026-10-23
 - [x] Moving money between budgets, with revisions and version history (M) — done 2026-10-23
 - [x] What-if scenarios and forecasts (L) — done 2026-10-23
-- [ ] Separate personal, household and business views (household and business as workspace kinds) (M)
+- [x] Separate personal, household and business views (household and business as workspace kinds) (M) — done 2026-10-23
 
 ## Phase 3 — Transactions and imports
 

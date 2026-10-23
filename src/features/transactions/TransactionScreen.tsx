@@ -19,12 +19,15 @@ type Props = {
   workspaceId: string;
   baseCurrency: string;
   recurringOnly?: boolean;
+  /** Where this list lives, for its filter links; a shared workspace's is under /w/:id. */
+  basePath?: string;
 };
 
 export function TransactionScreen({
   workspaceId,
   baseCurrency,
   recurringOnly = false,
+  basePath,
 }: Props) {
   const setOpen = useUIStore((s) => s.setTransactionComposerOpen);
   const queryClient = useQueryClient();
@@ -59,7 +62,7 @@ export function TransactionScreen({
   const accountName = (id: string | null) =>
     id ? accounts.data?.accounts.find((a) => a.id === id)?.name ?? "Account" : "—";
   const projectName = (id: string | null) => (id ? projects.data?.projects.find((p) => p.id === id)?.name ?? "Project" : null);
-  const base = recurringOnly ? "/recurring" : "/transactions";
+  const base = basePath ?? (recurringOnly ? "/recurring" : "/transactions");
   const showing = [
     accountFilter ? accounts.data?.accounts.find((a) => a.id === accountFilter)?.name ?? "one account" : null,
     tagFilter ? `#${tagFilter}` : null,

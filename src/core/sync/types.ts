@@ -13,6 +13,7 @@ import type { SplitLine } from "@/src/core/splits";
 import type { RolloverMode } from "@/src/core/budgets/rollover";
 import type { RevisionReason } from "@/src/core/budgets/revisions";
 import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
+import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 
 export type {
   ApprovalStatus,
@@ -26,6 +27,8 @@ export type {
 export type Workspace = {
   id: string;
   kind: WorkspaceKind;
+  /** What a shared workspace is for; "personal" for the personal one. */
+  purpose: WorkspacePurpose | "personal";
   name: string;
   slug: string;
   ownerUserId: string;
@@ -269,6 +272,7 @@ export type DecideApprovalInput = {
 export type CreateWorkspaceInput = {
   name: string;
   kind: "team";
+  purpose?: WorkspacePurpose;
   baseCurrency: string;
 };
 
