@@ -114,6 +114,14 @@ export const upsertBudgetBodySchema = z.object({
   alertThresholdPct: z.number().min(1).max(100).default(80),
   rollover: z.enum(ROLLOVER_MODES).optional(),
   rolloverSince: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  renew: z.boolean().optional(),
+});
+
+export const saveBudgetTemplateBodySchema = z.object({ name: z.string().trim().min(1).max(80) });
+
+export const applyBudgetTemplateBodySchema = z.object({
+  templateId: z.string().min(1).max(64),
+  monthlyIncomeMajor: amountMajorSchema.nullable().optional(),
 });
 
 export const upsertGoalBodySchema = z.object({

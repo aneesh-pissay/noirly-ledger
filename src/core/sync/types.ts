@@ -143,6 +143,8 @@ export type Budget = {
   /** What carries into the next period, counted from rolloverSince. */
   rollover: RolloverMode;
   rolloverSince: string | null;
+  /** Custom budgets: moves on to the next stretch of the same length when its dates pass. */
+  renew: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -333,6 +335,17 @@ export type UpsertBudgetInput = {
   rollover?: RolloverMode;
   /** The day carrying starts from; defaults to the start of the current period when rollover is turned on. */
   rolloverSince?: string | null;
+  renew?: boolean;
+};
+
+export type BudgetTemplateSummary = {
+  id: string;
+  name: string;
+  description: string;
+  builtIn: boolean;
+  /** Its amounts are shares of monthly income, asked for when applying. */
+  needsIncome: boolean;
+  lineCount: number;
 };
 
 export type UpsertSavingsGoalInput = {

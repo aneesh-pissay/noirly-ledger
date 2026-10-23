@@ -37,6 +37,7 @@ export async function POST(
       alertThresholdPct: body.alertThresholdPct,
       rollover: body.rollover,
       rolloverSince: body.rolloverSince,
+      renew: body.renew,
     });
     return jsonOk({ budget });
   } catch (error) {

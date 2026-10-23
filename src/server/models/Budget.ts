@@ -32,6 +32,8 @@ const budgetSchema = new Schema(
     // What happens to what's left at the end of a period (see src/core/budgets/rollover.ts), counted from rolloverSince.
     rollover: { type: String, enum: ROLLOVER_MODES, default: "none" },
     rolloverSince: { type: Date, default: null },
+    // Custom budgets only: once its dates pass, move on to the next stretch of the same length.
+    renew: { type: Boolean, default: false },
   },
   { timestamps: true },
 );

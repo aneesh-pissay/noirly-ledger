@@ -1,5 +1,6 @@
 import type { Types } from "mongoose";
-import { Transaction as TransactionModel, type BudgetDocument } from "@/src/server/models";
+import { Budget as BudgetModel, Transaction as TransactionModel, type BudgetDocument } from "@/src/server/models";
+import { renewedRange } from "@/src/core/budgets/templates";
 import { budgetCategoryIds } from "@/src/server/categories/tree";
 import { spentInCategories } from "@/src/server/splits";
 import { isoDate, periodWindow } from "@/src/core/budgets/period";
@@ -52,6 +53,15 @@ async function spentByDay(workspaceId: Types.ObjectId, categoryIds: Types.Object
  * available and left.
  */
 export async function budgetStatus(budget: BudgetDocument, fiscalYearStartMonth: number, now = new Date()) {
+  // A renewing custom budget whose dates have passed moves on first, saved so everyone sees the same dates.
+  if (budget.period === "custom" && budget.renew && budget.periodStart && budget.periodEnd) {
+    const next = renewedRange(isoDate(budget.periodStart), isoDate(budget.periodEnd), isoDate(now));
+    if (next) {
+      budget.periodStart = new Date(`${next.start}T00:00:00.000Z`);
+      budget.periodEnd = new Date(`${next.end}T00:00:00.000Z`);
+      await BudgetModel.updateOne({ _id: budget._id }, { $set: { periodStart: budget.periodStart, periodEnd: budget.periodEnd } });
+    }
+  }
   const window = periodWindow(budget.period, now, {
     start: budget.periodStart ? isoDate(budget.periodStart) : null,
     end: budget.periodEnd ? isoDate(budget.periodEnd) : null,

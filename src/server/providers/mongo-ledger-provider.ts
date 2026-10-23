@@ -667,7 +667,14 @@ export function createMongoLedgerProvider(
           period: input.period,
           periodStart: input.periodStart ? new Date(input.periodStart) : null,
         }).select("rollover rolloverSince").lean();
+        if (input.renew && input.period !== "custom") {
+          throw new ApiError(400, "invalid_request", "Weekly, monthly and yearly budgets already start again each period");
+        }
+        if (input.period === "custom" && (!input.periodStart || !input.periodEnd || input.periodEnd < input.periodStart)) {
+          throw new ApiError(400, "invalid_request", "A custom budget needs a start and an end date, the end not before the start");
+        }
         const rolloverFields: Record<string, unknown> = {};
+        if (input.renew !== undefined) rolloverFields.renew = input.renew;
         if (input.rollover !== undefined) {
           rolloverFields.rollover = input.rollover;
           rolloverFields.rolloverSince =

@@ -20,6 +20,7 @@ export const qk = {
   transaction: (id: string) => ["transaction", id] as const,
   budgets: (workspaceId: string) => ["budgets", workspaceId] as const,
   envelopes: (workspaceId: string) => ["envelopes", workspaceId] as const,
+  budgetTemplates: (workspaceId: string) => ["budget-templates", workspaceId] as const,
   // Under "budgets" so saving a budget refreshes the plan.
   monthPlan: (workspaceId: string, month: string) => ["budgets", workspaceId, "plan", month] as const,
   budgetPools: (workspaceId: string) => ["budget-pools", workspaceId] as const,

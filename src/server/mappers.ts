@@ -132,6 +132,7 @@ export function mapBudget(doc: BudgetDocument): Budget {
     alertThresholdPct: doc.alertThresholdPct,
     rollover: (doc.rollover ?? "none") as RolloverMode,
     rolloverSince: isoDay(doc.rolloverSince),
+    renew: Boolean(doc.renew),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
   };

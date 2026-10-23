@@ -2,6 +2,7 @@ import type {
   Account,
   NetWorth,
   MonthPlan,
+  BudgetTemplateSummary,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -154,6 +155,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+  listBudgetTemplates(workspaceId: string) {
+    return request<{ templates: BudgetTemplateSummary[] }>(`/api/workspaces/${workspaceId}/budget-templates`);
+  },
+  saveBudgetTemplate(workspaceId: string, name: string) {
+    return request<{ template: BudgetTemplateSummary }>(`/api/workspaces/${workspaceId}/budget-templates`, { method: "POST", body: JSON.stringify({ name }) });
+  },
+  applyBudgetTemplate(workspaceId: string, templateId: string, monthlyIncomeMajor: string | null) {
+    return request<{ budgets: number; categoriesCreated: number }>(`/api/workspaces/${workspaceId}/budget-templates/apply`, { method: "POST", body: JSON.stringify({ templateId, monthlyIncomeMajor }) });
+  },
+  deleteBudgetTemplate(templateId: string) {
+    return request<{ ok: boolean }>(`/api/budget-templates/${templateId}`, { method: "DELETE" });
   },
   deleteBudget(budgetId: string) {
     return request<{ ok: boolean }>(`/api/budgets/${budgetId}`, {

@@ -13,6 +13,7 @@ import { categoryTree } from "@/src/core/categories";
 import { ROLLOVER_LABEL, ROLLOVER_MODES, type RolloverMode } from "@/src/core/budgets/rollover";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { PlanPanel } from "@/src/features/budgets/PlanPanel";
+import { TemplatesPanel } from "@/src/features/budgets/TemplatesPanel";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -20,7 +21,11 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
   const queryClient = useQueryClient();
   const [categoryId, setCategoryId] = useState("");
   const [limitMajor, setLimitMajor] = useState("");
-  const [period, setPeriod] = useState<"monthly" | "weekly" | "yearly">("monthly");
+  const [period, setPeriod] = useState<"monthly" | "weekly" | "yearly" | "custom">("monthly");
+  // Custom budgets: their dates, and whether they move on to the next stretch when these pass.
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
+  const [renew, setRenew] = useState(false);
   const [rollover, setRollover] = useState<RolloverMode>("none");
   // Empty means "from the start of this period".
   const [rolloverSince, setRolloverSince] = useState("");
@@ -43,8 +48,9 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
         period,
         limitMajor,
         currency: baseCurrency,
-        rollover,
-        rolloverSince: rollover !== "none" && rolloverSince ? rolloverSince : null,
+        ...(period === "custom"
+          ? { periodStart, periodEnd, renew, rollover: "none" }
+          : { rollover, rolloverSince: rollover !== "none" && rolloverSince ? rolloverSince : null }),
       }),
     onMutate: () => setError(null),
     onError: (err: Error) => setError(err.message),
@@ -65,6 +71,7 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
   return (
     <PageContainer size="md">
       <h1 className="text-2xl font-semibold tracking-tight">Budgets</h1>
+      <TemplatesPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
       <form
         className="mt-6 grid gap-3 surface grain rounded-[var(--r-lg)] p-4 sm:grid-cols-4 sm:items-end"
         onSubmit={(event) => {
@@ -93,11 +100,12 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
           <Select
             id="b-period"
             value={period}
-            onChange={(e) => setPeriod(e.target.value as "monthly" | "weekly" | "yearly")}
+            onChange={(e) => setPeriod(e.target.value as "monthly" | "weekly" | "yearly" | "custom")}
           >
             <option value="monthly">Monthly</option>
             <option value="weekly">Weekly</option>
             <option value="yearly">Yearly (financial year)</option>
+            <option value="custom">Custom dates</option>
           </Select>
         </div>
         <div>
@@ -110,6 +118,23 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
             required
           />
         </div>
+        {period === "custom" ? (
+          <>
+            <div>
+              <Label htmlFor="b-start">Starts</Label>
+              <Input id="b-start" type="date" className="font-mono" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} required />
+            </div>
+            <div>
+              <Label htmlFor="b-end">Ends</Label>
+              <Input id="b-end" type="date" className="font-mono" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} required />
+            </div>
+            <label className="flex items-center gap-2 text-sm sm:col-span-2">
+              <input type="checkbox" checked={renew} onChange={(e) => setRenew(e.target.checked)} />
+              Renew when it ends, for the same length again
+            </label>
+          </>
+        ) : (
+        <>
         <div className="sm:col-span-2">
           <Label htmlFor="b-rollover">At the end of a period</Label>
           <Select id="b-rollover" value={rollover} onChange={(e) => setRollover(e.target.value as RolloverMode)}>
@@ -123,6 +148,8 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
             <p className="mt-1 text-xs text-[var(--muted-foreground)]">Leave empty to start carrying from this period.</p>
           </div>
         ) : null}
+        </>
+        )}
         {error ? <p role="alert" className="text-sm text-[var(--balance-negative)] sm:col-span-4">{error}</p> : null}
         <Button type="submit" className="sm:col-span-4" disabled={save.isPending}>
           Save budget
@@ -142,6 +169,7 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
                 <p className="text-sm font-medium">{categoryName(row.budget.categoryId)}</p>
                 <p className="font-mono text-xs text-[var(--muted-foreground)]">
                   <span className="uppercase">{row.budget.period}</span> · {row.periodFrom} to {row.periodTo}
+                  {row.budget.renew ? " · renews" : ""}
                 </p>
               </div>
               <div className="mt-3">
