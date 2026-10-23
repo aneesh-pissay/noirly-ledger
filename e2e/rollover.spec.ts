@@ -61,10 +61,10 @@ test.describe("budget rollover", () => {
     await page.getByLabel("At the end of a period").selectOption({ label: "Carry over what's unspent" });
     await page.getByLabel("Carry from (optional)").fill(monthDay(2, 1));
     await page.getByRole("button", { name: "Save budget" }).click();
-    const row = page.locator("li", { hasText: "Food" });
+    const row = page.locator('[data-budget="Food"]');
     await expect(row).toContainText("10.00 USD carried in, 110.00 USD available");
     await expect(row).toContainText(`counting from ${monthDay(2, 1)}`);
-    await expect(page.locator("li", { hasText: "Fun" })).toContainText("Nothing carried in ·");
+    await expect(page.locator('[data-budget="Fun"]')).toContainText("Nothing carried in ·");
     await page.screenshot({ path: "test-results/rollover.png", fullPage: true });
     await context.close();
   });

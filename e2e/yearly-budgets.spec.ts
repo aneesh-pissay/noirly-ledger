@@ -43,7 +43,7 @@ test.describe("yearly budgets", () => {
     const page = await context.newPage();
     await page.goto("/budgets");
     await expect(page.getByText(`yearly · ${first} to ${last}`)).toBeVisible();
-    await expect(page.locator("li", { hasText: "Insurance" })).toContainText("800.00 USD");
+    await expect(page.locator('[data-budget="Insurance"]')).toContainText("800.00 USD");
     await page.getByLabel("Category").selectOption({ label: "Insurance" });
     await expect(page.getByLabel("Period").locator("option", { hasText: "Yearly (financial year)" })).toHaveCount(1);
     await page.screenshot({ path: "test-results/yearly-budgets.png", fullPage: true });

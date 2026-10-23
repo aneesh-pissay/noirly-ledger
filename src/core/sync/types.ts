@@ -445,6 +445,21 @@ export type Project = {
 export type TagSummary = { tag: string; count: number };
 export type MerchantSummary = { key: string; name: string; count: number; spentMinor: MoneyMinor };
 
+/** A month's zero-based plan in base currency: income to plan with, what budgets assign, and what's left. */
+export type MonthPlan = {
+  month: string;
+  baseCurrency: string;
+  /** What the month is planned with; null until set, and then income received counts. */
+  expectedIncomeMinor: MoneyMinor | null;
+  receivedIncomeMinor: MoneyMinor;
+  incomeMinor: MoneyMinor;
+  assignedMinor: MoneyMinor;
+  leftMinor: MoneyMinor;
+  state: "balanced" | "unassigned" | "overassigned";
+  /** Per category with budgets: the month's share of them, and its monthly budget (the one edited here) if any. */
+  lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; monthlyBudgetId: string | null; monthlyLimitMinor: MoneyMinor | null }>;
+};
+
 /** What a workspace has and owes across its accounts, in its base currency. */
 export type NetWorth = {
   baseCurrency: string;

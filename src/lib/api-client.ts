@@ -1,6 +1,7 @@
 import type {
   Account,
   NetWorth,
+  MonthPlan,
   Project,
   TagSummary,
   MerchantSummary,
@@ -183,6 +184,12 @@ export const api = {
   },
   listMerchants(workspaceId: string) {
     return request<{ merchants: MerchantSummary[] }>(`/api/workspaces/${workspaceId}/merchants`);
+  },
+  getMonthPlan(workspaceId: string, month: string) {
+    return request<{ plan: MonthPlan }>(`/api/workspaces/${workspaceId}/plan?month=${month}`);
+  },
+  setExpectedIncome(workspaceId: string, month: string, expectedIncomeMajor: string | null) {
+    return request<{ plan: MonthPlan }>(`/api/workspaces/${workspaceId}/plan`, { method: "PUT", body: JSON.stringify({ month, expectedIncomeMajor }) });
   },
   getNetWorth(workspaceId: string, months = 12) {
     return request<{ netWorth: NetWorth }>(`/api/workspaces/${workspaceId}/net-worth?months=${months}`);

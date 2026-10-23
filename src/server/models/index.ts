@@ -16,6 +16,7 @@ export {
 export { FxRate, type FxRateDocument } from "./FxRate";
 export { Account, type AccountDocument } from "./Account";
 export { Project, type ProjectDocument } from "./Project";
+export { BudgetPlan, type BudgetPlanDocument } from "./BudgetPlan";
 export {
   WorkspaceInvite,
   type WorkspaceInviteDocument,

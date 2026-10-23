@@ -195,6 +195,11 @@ export const meSettingsBodySchema = z.object({
   numberFormat: z.enum(NUMBER_FORMATS),
 });
 
+export const monthPlanBodySchema = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  expectedIncomeMajor: amountMajorSchema.nullable(),
+});
+
 /** A statement to reconcile an account to: its closing balance and the last day it covers. */
 export const reconcileAccountBodySchema = z.object({
   statementMajor: signedAmountMajorSchema,

@@ -12,6 +12,7 @@ import { MoneyText } from "@/src/components/MoneyText";
 import { categoryTree } from "@/src/core/categories";
 import { ROLLOVER_LABEL, ROLLOVER_MODES, type RolloverMode } from "@/src/core/budgets/rollover";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
+import { PlanPanel } from "@/src/features/budgets/PlanPanel";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -128,13 +129,15 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
         </Button>
       </form>
 
+      <PlanPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
+
       <ul className="mt-8 space-y-4">
         {rows.map((row) => {
           // Measured against what's available: the limit plus anything carried in.
           const ratio = row.availableMinor > 0 ? row.spentMinor / row.availableMinor : row.spentMinor > 0 ? Infinity : 0;
           const over = ratio > 1;
           return (
-            <li key={row.budget.id} className="surface grain rounded-[var(--r-lg)] p-4">
+            <li key={row.budget.id} data-budget={categoryName(row.budget.categoryId)} className="surface grain rounded-[var(--r-lg)] p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">{categoryName(row.budget.categoryId)}</p>
                 <p className="font-mono text-xs text-[var(--muted-foreground)]">
