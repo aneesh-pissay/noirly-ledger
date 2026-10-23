@@ -10,6 +10,8 @@ import type {
   SavedView,
   InstallmentPlanSummary,
   TransactionActivity,
+  ImportPreview,
+  ImportBatchSummary,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -37,6 +39,7 @@ import type { NumberFormat } from "@/src/core/locale-format";
 import type { ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { BulkChange } from "@/src/core/bulk";
+import type { ColumnMapping } from "@/src/core/imports";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -194,6 +197,28 @@ export const api = {
   },
   bulkCreateTransactions(workspaceId: string, transactions: Array<Record<string, unknown>>) {
     return request<{ transactions: Transaction[] }>(`/api/workspaces/${workspaceId}/transactions/bulk-create`, { method: "POST", body: JSON.stringify({ transactions }) });
+  },
+  previewImport(workspaceId: string, file: File, options: { mapping?: ColumnMapping | null; accountId?: string | null }) {
+    const form = new FormData();
+    form.append("file", file);
+    if (options.mapping) form.append("mapping", JSON.stringify(options.mapping));
+    if (options.accountId) form.append("accountId", options.accountId);
+    return request<{ preview: ImportPreview }>(`/api/workspaces/${workspaceId}/imports/preview`, { method: "POST", body: form });
+  },
+  commitImport(workspaceId: string, file: File, options: { mapping: ColumnMapping; accountId: string | null; categoryId: string | null; skipLines: number[] }) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("mapping", JSON.stringify(options.mapping));
+    if (options.accountId) form.append("accountId", options.accountId);
+    if (options.categoryId) form.append("categoryId", options.categoryId);
+    form.append("skipLines", JSON.stringify(options.skipLines));
+    return request<{ batch: ImportBatchSummary }>(`/api/workspaces/${workspaceId}/imports`, { method: "POST", body: form });
+  },
+  listImports(workspaceId: string) {
+    return request<{ batches: ImportBatchSummary[] }>(`/api/workspaces/${workspaceId}/imports`);
+  },
+  undoImport(batchId: string) {
+    return request<{ batch: ImportBatchSummary }>(`/api/imports/${batchId}`, { method: "DELETE" });
   },
   getGstSummary(workspaceId: string, from: string, to: string) {
     return request<{ summary: GstSummary }>(`/api/workspaces/${workspaceId}/gst-summary?from=${from}&to=${to}`);

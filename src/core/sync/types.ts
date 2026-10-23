@@ -17,6 +17,7 @@ import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { ViewFilters } from "@/src/core/search";
 import type { FieldChange, HistoryAction } from "@/src/core/history";
 import type { GstAmounts, GstSettings } from "@/src/core/gst";
+import type { ColumnMapping, ImportRow } from "@/src/core/imports";
 
 export type {
   ApprovalStatus,
@@ -407,6 +408,28 @@ export type TransactionActivity = {
   attachments: Array<{ id: string; name: string; contentType: string; size: number; url: string; uploadedAt: string }>;
   comments: Array<{ id: string; body: string; authorName: string; createdAt: string; canDelete: boolean }>;
   history: Array<{ id: string; action: HistoryAction; changes: FieldChange[]; detail: string | null; actorName: string; createdAt: string }>;
+};
+
+export type ImportPreview = {
+  fileName: string;
+  headers: string[];
+  /** Lines above the column names, like the account details banks put first. */
+  preamble: string[];
+  mapping: ColumnMapping;
+  rows: Array<ImportRow & { duplicate: boolean }>;
+};
+
+export type ImportBatchSummary = {
+  id: string;
+  fileName: string;
+  accountId: string | null;
+  rowCount: number;
+  createdCount: number;
+  skippedCount: number;
+  /** Its transactions still there. */
+  liveCount: number;
+  rolledBack: boolean;
+  createdAt: string;
 };
 
 export type InstallmentPlanSummary = {

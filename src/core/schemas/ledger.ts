@@ -11,6 +11,7 @@ import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
 import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
 import { MAX_BULK, MAX_BULK_CREATE } from "@/src/core/bulk";
 import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
+import { DATE_FORMATS } from "@/src/core/imports";
 
 export const currencyCode = z
   .string()
@@ -180,6 +181,20 @@ export const attachmentBodySchema = z.object({
 });
 
 export const commentBodySchema = z.object({ body: z.string().trim().min(1).max(2000) });
+
+const column = z.number().int().min(0).max(200).nullable();
+
+export const columnMappingSchema = z.object({
+  headerRow: z.number().int().min(0).max(50),
+  date: column,
+  description: column,
+  amount: column,
+  drCr: column,
+  debit: column,
+  credit: column,
+  reference: column,
+  dateFormat: z.enum(DATE_FORMATS),
+});
 
 export const bulkChangeBodySchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(MAX_BULK),

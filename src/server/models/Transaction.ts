@@ -120,6 +120,8 @@ const transactionSchema = new Schema(
     // EMI payments: the plan, and which payment (0 the processing fee, -1 paying off early).
     installmentPlanId: { type: Schema.Types.ObjectId, ref: "InstallmentPlan", default: null, index: true },
     installmentNumber: { type: Number, default: null },
+    // Added by a statement import, which can be undone as a whole.
+    importBatchId: { type: Schema.Types.ObjectId, ref: "ImportBatch", default: null, index: true },
     // More files besides the receipt; see src/server/transaction-activity.ts.
     attachments: { type: [attachmentSchema], default: [] },
     // UPI payments: the 12-digit reference and the UPI ID paid to or from (see src/core/upi.ts).
