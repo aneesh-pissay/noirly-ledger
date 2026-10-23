@@ -40,6 +40,9 @@ export const createTransactionBodySchema = z.object({
   /** Refunds: the expense this takes back. */
   refundOfId: z.string().min(1).nullable().optional(),
   clearing: z.enum(CLEARING_STATES).optional(),
+  /** UPI reference (12 digits, spaces allowed) and UPI ID; checked properly on the server. */
+  upiRef: z.string().max(40).nullable().optional(),
+  upiId: z.string().max(100).nullable().optional(),
   tags: z.array(z.string().trim().max(40)).max(20).nullable().optional(),
   merchant: z.string().trim().max(120).nullable().optional(),
   projectId: z.string().min(1).nullable().optional(),

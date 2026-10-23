@@ -103,6 +103,9 @@ const transactionSchema = new Schema(
     installmentNumber: { type: Number, default: null },
     // More files besides the receipt; see src/server/transaction-activity.ts.
     attachments: { type: [attachmentSchema], default: [] },
+    // UPI payments: the 12-digit reference and the UPI ID paid to or from (see src/core/upi.ts).
+    upiRef: { type: String, default: null },
+    upiId: { type: String, default: null },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },
@@ -135,6 +138,7 @@ transactionSchema.index({ workspaceId: 1, date: -1 });
 transactionSchema.index({ "splits.categoryId": 1 });
 transactionSchema.index({ workspaceId: 1, tags: 1 });
 transactionSchema.index({ workspaceId: 1, merchantKey: 1 });
+transactionSchema.index({ workspaceId: 1, upiRef: 1 });
 transactionSchema.index({ budgetPoolId: 1, isPosted: 1 });
 // The recurring engine looks up a rule's occurrences by date.
 transactionSchema.index({ recurringParentId: 1, date: -1 });

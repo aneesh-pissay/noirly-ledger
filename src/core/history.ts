@@ -17,6 +17,8 @@ export const TRACKED_FIELDS = [
   "projectId",
   "clearing",
   "splits",
+  "upiRef",
+  "upiId",
 ] as const;
 export type TrackedField = (typeof TRACKED_FIELDS)[number];
 
@@ -34,6 +36,8 @@ export const FIELD_LABEL: Record<TrackedField, string> = {
   projectId: "Project",
   clearing: "Status",
   splits: "Split",
+  upiRef: "UPI reference",
+  upiId: "UPI ID",
 };
 
 export const HISTORY_ACTIONS = ["created", "updated", "deleted", "attachment_added", "attachment_removed"] as const;
@@ -72,6 +76,8 @@ export function snapshotOf(t: {
   projectId?: string | null;
   clearing?: string | null;
   splits?: Array<{ categoryId: string | null; amountMinor: number }>;
+  upiRef?: string | null;
+  upiId?: string | null;
 }): Snapshot {
   return {
     type: t.type,
@@ -87,6 +93,8 @@ export function snapshotOf(t: {
     projectId: t.projectId ?? null,
     clearing: t.clearing ?? "cleared",
     splits: t.splits?.length ? t.splits.map((line) => `${line.categoryId ?? "none"}:${line.amountMinor}`).join(", ") : null,
+    upiRef: t.upiRef ?? null,
+    upiId: t.upiId ?? null,
   };
 }
 

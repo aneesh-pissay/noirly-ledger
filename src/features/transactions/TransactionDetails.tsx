@@ -7,6 +7,7 @@ import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { FIELD_LABEL, MAX_ATTACHMENTS, type FieldChange } from "@/src/core/history";
 import { CLEARING_LABEL, clearingOf } from "@/src/core/clearing";
+import { formatUpiRef } from "@/src/core/upi";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import type { Transaction } from "@/src/core/sync/types";
 
@@ -104,6 +105,11 @@ function DetailsBody({ workspaceId, transaction, categoryName, accountName, proj
         <span className="font-mono">{money(transaction.type === "expense" ? -transaction.amountMinor : transaction.amountMinor, transaction.currency)}</span>
         <span className="text-[var(--muted-foreground)]"> · {transaction.date} · {transaction.merchant ?? transaction.note ?? categoryName(transaction.categoryId)}</span>
       </p>
+      {transaction.upiRef || transaction.upiId ? (
+        <p className="font-mono text-xs text-[var(--muted-foreground)]">
+          UPI{transaction.upiRef ? ` ${formatUpiRef(transaction.upiRef)}` : ""}{transaction.upiId ? ` · ${transaction.upiId}` : ""}
+        </p>
+      ) : null}
 
       <section aria-label="Files">
         <h3 className="text-xs uppercase tracking-wide text-[var(--muted-foreground)]">Files</h3>

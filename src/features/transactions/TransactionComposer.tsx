@@ -32,6 +32,8 @@ type FormValues = {
   /** Typed as "trip, work". */
   tags: string;
   projectId: string;
+  upiRef: string;
+  upiId: string;
 };
 
 type Props = {
@@ -82,6 +84,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
       merchant: "",
       tags: "",
       projectId: "",
+      upiRef: "",
+      upiId: "",
     },
   });
 
@@ -110,6 +114,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         merchant: values.merchant.trim() || null,
         tags: parseTagInput(values.tags),
         projectId: values.projectId || null,
+        upiRef: values.upiRef.trim() || null,
+        upiId: values.upiId.trim() || null,
         recurrence: values.frequency
           ? { frequency: values.frequency, interval: 1 }
           : null,
@@ -142,6 +148,8 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         merchant: "",
         tags: "",
         projectId: "",
+        upiRef: "",
+        upiId: "",
       });
       setReceipt(null);
       setLines(null);
@@ -385,6 +393,19 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             {(tags.data?.tags ?? []).map((tag) => <option key={tag.tag} value={tag.tag} />)}
           </datalist>
         </div>
+        <details className="group rounded-[var(--r-md)] border border-[var(--hairline)] px-3 py-2">
+          <summary className="cursor-pointer text-xs uppercase tracking-wide text-[var(--muted-foreground)]">UPI details</summary>
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="upi-ref">UPI reference</Label>
+              <Input id="upi-ref" inputMode="numeric" className="font-mono" placeholder="12 digits" maxLength={20} {...form.register("upiRef")} />
+            </div>
+            <div>
+              <Label htmlFor="upi-id">UPI ID</Label>
+              <Input id="upi-id" autoComplete="off" placeholder="name@bank" maxLength={100} {...form.register("upiId")} />
+            </div>
+          </div>
+        </details>
         <div>
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" {...form.register("note")} />

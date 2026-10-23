@@ -14,6 +14,8 @@ export function createInputFromBody(workspaceId: string, body: z.infer<typeof cr
     accountId: body.accountId ?? null,
     toAccountId: body.toAccountId ?? null,
     refundOfId: body.refundOfId ?? null,
+    upiRef: body.upiRef,
+    upiId: body.upiId,
     clearing: body.clearing,
     tags: body.tags,
     merchant: body.merchant,

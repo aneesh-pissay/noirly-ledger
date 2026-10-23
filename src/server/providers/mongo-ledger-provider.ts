@@ -82,6 +82,7 @@ import { merchantKey } from "@/src/core/labels";
 import { escapeRegex, parseSearch } from "@/src/core/search";
 import { diffSnapshots, snapshotOf } from "@/src/core/history";
 import { recordChange } from "@/src/server/transaction-activity";
+import { upiFields } from "@/src/server/upi";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
 
@@ -343,6 +344,9 @@ export function createMongoLedgerProvider(
               { tags: search.text.toLowerCase().replace(/^#+/, "") },
               ...(ids.length ? [{ categoryId: { $in: ids } }, { "splits.categoryId": { $in: ids } }] : []),
               ...(search.amountMinor != null ? [{ amountMinor: search.amountMinor }, { toAmountMinor: search.amountMinor }] : []),
+              // A UPI reference however it's spaced, or part of a UPI ID.
+              ...(/^[\d\s-]{12,20}$/.test(search.text) ? [{ upiRef: search.text.replace(/[\s-]/g, "") }] : []),
+              { upiId: pattern },
             ],
           });
         }
@@ -438,6 +442,7 @@ export function createMongoLedgerProvider(
           merchant: input.merchant !== undefined ? input.merchant : refundOf?.merchant ?? null,
         });
         const projectId = input.projectId ?? refundOf?.projectId?.toString() ?? null;
+        const upi = await upiFields(workspace._id, { upiRef: input.upiRef ?? null, upiId: input.upiId ?? null });
         await assertTransactionProject(workspace._id, projectId, refundOf?.projectId?.toString() ?? null);
         const receipt = receiptFields(workspace._id, input.receiptStorageKey);
         const asOf = new Date(`${input.date}T12:00:00.000Z`);
@@ -468,6 +473,7 @@ export function createMongoLedgerProvider(
           clearing: input.clearing ?? "cleared",
           splits: storedSplits(lines, baseAmountMinor),
           ...labels,
+          ...upi,
           projectId: optionalOid(projectId),
           date: asOf,
           note: input.note ?? null,
@@ -578,6 +584,7 @@ export function createMongoLedgerProvider(
         if (patch.date) doc.date = new Date(`${patch.date}T12:00:00.000Z`);
         if (patch.note !== undefined) doc.note = patch.note;
         doc.set(labelFields({ tags: patch.tags, merchant: patch.merchant }));
+        doc.set(await upiFields(doc.workspaceId, { upiRef: patch.upiRef, upiId: patch.upiId }, doc._id));
         if (patch.projectId !== undefined) {
           await assertTransactionProject(workspace._id, patch.projectId, doc.projectId?.toString() ?? null);
           doc.projectId = optionalOid(patch.projectId);

@@ -96,6 +96,9 @@ export type Transaction = {
   clearing: Clearing;
   /** Files kept with it besides the receipt. */
   attachmentCount: number;
+  /** UPI payments: the 12-digit reference, and the UPI ID paid to or from. */
+  upiRef: string | null;
+  upiId: string | null;
   /** EMI payments: the plan and which payment (0 the processing fee, -1 paying off early). */
   installmentPlanId: string | null;
   installmentNumber: number | null;
@@ -315,6 +318,8 @@ export type CreateTransactionInput = {
   toAccountId?: string | null;
   toAmountMinor?: number | null;
   refundOfId?: string | null;
+  upiRef?: string | null;
+  upiId?: string | null;
   /** New transactions are pending or cleared; only reconciling an account makes them reconciled. */
   clearing?: Clearing;
   /** Two or more lines that add up to the amount; null removes a split. */

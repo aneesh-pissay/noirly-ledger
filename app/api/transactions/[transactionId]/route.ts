@@ -34,6 +34,8 @@ export async function PATCH(
       accountId: body.accountId,
       toAccountId: body.toAccountId,
       clearing: body.clearing,
+      upiRef: body.upiRef,
+      upiId: body.upiId,
       tags: body.tags,
       merchant: body.merchant,
       projectId: body.projectId,

@@ -87,6 +87,8 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     refundedMinor: 0,
     clearing: clearingOf(doc.clearing),
     attachmentCount: doc.attachments?.length ?? 0,
+    upiRef: doc.upiRef ?? null,
+    upiId: doc.upiId ?? null,
     installmentPlanId: doc.installmentPlanId ? doc.installmentPlanId.toString() : null,
     installmentNumber: doc.installmentNumber ?? null,
     tags: doc.tags ?? [],
