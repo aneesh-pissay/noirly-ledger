@@ -12,7 +12,7 @@ export async function POST(
     await assertObjectId(workspaceId, "workspaceId");
     const form = await readImportForm(request);
     const { ctx } = await getLedgerProvider();
-    return jsonOk({ preview: await previewImport(ctx.userId, workspaceId, form.file, { mapping: form.mapping, accountId: form.accountId }) });
+    return jsonOk({ preview: await previewImport(ctx.userId, workspaceId, form.file, { mapping: form.mapping, bank: form.bank, accountId: form.accountId }) });
   } catch (error) {
     return jsonError(error);
   }

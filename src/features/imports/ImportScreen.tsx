@@ -8,6 +8,7 @@ import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { categoryTree } from "@/src/core/categories";
 import type { ColumnMapping, DateFormat } from "@/src/core/imports";
+import { BANK_FORMATS, bankFormat } from "@/src/core/bank-formats";
 import type { ImportPreview } from "@/src/core/sync/types";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { Select } from "@/src/components/Select";
@@ -26,6 +27,8 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [accountId, setAccountId] = useState("");
+  // Which bank's layout to read by: "auto" recognises it, "none" guesses from the column names.
+  const [bank, setBank] = useState("auto");
   const [categoryId, setCategoryId] = useState("");
   // Lines left out on purpose; duplicates start out left out.
   const [skipped, setSkipped] = useState<Set<number>>(new Set());
@@ -35,7 +38,8 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
   const currency = openAccounts.find((a) => a.id === accountId)?.currency ?? baseCurrency;
 
   const read = useMutation({
-    mutationFn: (input: { file: File; mapping: ColumnMapping | null; accountId: string }) => api.previewImport(workspaceId, input.file, { mapping: input.mapping, accountId: input.accountId || null }),
+    mutationFn: (input: { file: File; mapping: ColumnMapping | null; bank?: string; accountId: string }) =>
+      api.previewImport(workspaceId, input.file, { mapping: input.mapping, bank: input.bank ?? bank, accountId: input.accountId || null }),
     onMutate: () => setError(null),
     onSuccess: ({ preview: next }) => {
       setPreview(next);
@@ -115,6 +119,21 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
             }}
           />
         </div>
+        <div>
+          <Label htmlFor="import-bank">Statement from</Label>
+          <Select
+            id="import-bank"
+            value={bank}
+            onChange={(e) => {
+              setBank(e.target.value);
+              if (file) read.mutate({ file, mapping: null, bank: e.target.value, accountId });
+            }}
+          >
+            <option value="auto">Recognise the bank</option>
+            {BANK_FORMATS.map((format) => <option key={format.id} value={format.id}>{format.name}</option>)}
+            <option value="none">Another bank (pick the columns)</option>
+          </Select>
+        </div>
         {openAccounts.length ? (
           <div>
             <Label htmlFor="import-account">Into account</Label>
@@ -139,6 +158,11 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
       {preview ? (
         <>
           <section aria-label="Columns" className="mt-6 grid gap-3 sm:grid-cols-4">
+            {preview.mapping.bank ? (
+              <p data-bank={preview.mapping.bank} className="text-sm sm:col-span-4">
+                {bank === "auto" ? "Looks like a statement from" : "Read as a statement from"} {bankFormat(preview.mapping.bank)?.name ?? preview.mapping.bank}; its columns are set below.
+              </p>
+            ) : null}
             {preview.preamble.length ? <p className="text-xs text-[var(--muted-foreground)] sm:col-span-4">Skipped above the columns: {preview.preamble.slice(0, 3).join(" · ")}</p> : null}
             <div>
               <Label htmlFor="col-header">Column names on row</Label>

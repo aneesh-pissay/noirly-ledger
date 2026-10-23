@@ -62,6 +62,10 @@ export type ColumnMapping = {
   credit: number | null;
   reference: number | null;
   dateFormat: DateFormat;
+  /** A card statement's way: plain amounts are charges (money out), and only those marked Cr come in. */
+  chargesPositive?: boolean;
+  /** The bank layout this mapping came from, if any (see bank-formats). */
+  bank?: string | null;
 };
 
 export const DATE_FORMATS = ["DMY", "MDY", "YMD"] as const;
@@ -203,6 +207,7 @@ export function mapRows(rows: string[][], mapping: ColumnMapping): ImportRow[] {
       amountMinor = parseStatementAmount(cell(row, mapping.amount));
       const drCr = cell(row, mapping.drCr).toLowerCase();
       if (amountMinor != null && drCr) amountMinor = Math.abs(amountMinor) * (drCr.startsWith("d") ? -1 : 1);
+      else if (amountMinor != null && mapping.chargesPositive) amountMinor = -amountMinor;
     } else {
       const out = parseStatementAmount(cell(row, mapping.debit));
       const inn = parseStatementAmount(cell(row, mapping.credit));

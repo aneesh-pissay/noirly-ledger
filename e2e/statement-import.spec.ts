@@ -125,6 +125,41 @@ test.describe("statement import", () => {
     expect((await owner.api.post(`/api/workspaces/${ws}/imports/preview`, { multipart: { file: { name: "x.csv", mimeType: "text/csv", buffer: Buffer.from("") } } })).status()).toBe(400);
   });
 
+  test("recognises the bank, or reads by the one chosen", async ({ browser }) => {
+    const ws = await personalWorkspaceId(owner);
+    const preview = async (name: string, csv: string, bank?: string) =>
+      owner.api.post(`/api/workspaces/${ws}/imports/preview`, { multipart: { file: { name, mimeType: "text/csv", buffer: Buffer.from(csv) }, ...(bank ? { bank } : {}) } });
+    const axis = ["Tran Date,CHQNO,PARTICULARS,DR,CR,BAL,SOL", "03-10-2026,,UPI/P2M/BIGBASKET,812.40,,4187.60,1234", "04-10-2026,,IMPS/CREDIT,,1500.00,5687.60,1234"].join("\n");
+    const card = [
+      "Date,Sr.No.,Transaction Details,Reward Point Header,Intl.Amount,Amount(in Rs),BillingAmountSign",
+      "07/10/2026,1,AMAZON PAY,12,0,999.00,",
+      "08/10/2026,2,PAYMENT RECEIVED,0,0,5000.00,CR",
+    ].join("\n");
+    const read = async (res: Awaited<ReturnType<typeof preview>>) => ((await res.json()) as { preview: Preview }).preview;
+    expect((await read(await preview("axis.csv", axis))).mapping).toMatchObject({ bank: "axis", date: 0, description: 2, debit: 3, credit: 4, reference: 1 });
+    const cardRows = (await read(await preview("card.csv", card))).rows.map((r) => r.amountMinor);
+    expect(cardRows).toEqual([-99_900, 500_000]);
+    const wrong = await preview("axis.csv", axis, "hdfc");
+    expect(wrong.status()).toBe(400);
+    expect(await wrong.text()).toContain("doesn't look like a HDFC Bank statement");
+    expect((await read(await preview("axis.csv", axis, "none"))).mapping.bank).toBeNull();
+
+    const context = await browserAs(browser, owner);
+    const page = await context.newPage();
+    await page.goto("/transactions/import");
+    // Categories arriving means the page is live, so picking the file is seen.
+    await expect(page.getByRole("option", { name: "Food & Drink" })).toBeAttached();
+    await page.getByLabel("Statement file").setInputFiles({ name: "axis.csv", mimeType: "text/csv", buffer: Buffer.from(axis) });
+    await expect(page.locator("[data-bank]")).toHaveText("Looks like a statement from Axis Bank; its columns are set below.");
+    await expect(page.getByRole("table", { name: "Statement rows" }).locator("[data-import-line]")).toHaveCount(2);
+    await page.screenshot({ path: "test-results/import-bank.png", fullPage: true });
+    await page.getByLabel("Statement from").selectOption("kotak");
+    await expect(page.getByRole("alert").filter({ hasText: "Kotak" })).toContainText("doesn't look like a Kotak Mahindra Bank statement");
+    await page.getByLabel("Statement from").selectOption("axis");
+    await expect(page.locator("[data-bank]")).toHaveText("Read as a statement from Axis Bank; its columns are set below.");
+    await context.close();
+  });
+
   test("import a statement in the app, then undo it", async ({ browser }) => {
     const context = await browserAs(browser, owner);
     const page = await context.newPage();

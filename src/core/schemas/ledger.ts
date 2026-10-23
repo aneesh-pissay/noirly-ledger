@@ -194,6 +194,8 @@ export const columnMappingSchema = z.object({
   credit: column,
   reference: column,
   dateFormat: z.enum(DATE_FORMATS),
+  chargesPositive: z.boolean().optional(),
+  bank: z.string().max(40).nullable().optional(),
 });
 
 export const bulkChangeBodySchema = z.object({

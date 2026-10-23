@@ -5,6 +5,7 @@ import { Account as AccountModel, ImportBatch, Transaction as TransactionModel, 
 import { requireMembershipRole } from "@/src/server/workspace/members";
 import { bulkCreateTransactions } from "@/src/server/bulk";
 import { readXlsx } from "@/src/server/imports/xlsx";
+import { bankFormat, detectBankFormat, findBankFormat } from "@/src/core/bank-formats";
 import { guessMapping, mapRows, MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, parseCsv, type ColumnMapping, type ImportRow } from "@/src/core/imports";
 import type { CreateTransactionInput, ImportBatchSummary, ImportPreview, LedgerSyncProvider } from "@/src/core/sync/types";
 
@@ -60,11 +61,31 @@ async function markDuplicates(workspaceId: Types.ObjectId, accountId: string | n
 }
 
 /** What importing the file would add, row by row, with problems and likely duplicates marked. Saves nothing. */
-export function previewImport(userId: string, workspaceId: string, file: StatementFile, options: { mapping?: ColumnMapping | null; accountId?: string | null }): Promise<ImportPreview> {
+/**
+ * The columns to read a statement by when none were picked: the chosen
+ * bank's layout, or with "auto" the layout of whichever bank it looks like,
+ * else a guess from the column names ("none" goes straight to the guess).
+ */
+export function startingMapping(rows: string[][], bank: string | null | undefined): ColumnMapping {
+  if (bank && bank !== "auto" && bank !== "none") {
+    const format = bankFormat(bank);
+    if (!format) throw new ApiError(400, "invalid_request", "Unknown bank format");
+    const mapping = findBankFormat(rows, format);
+    if (!mapping) throw new ApiError(400, "format_mismatch", `This doesn't look like a ${format.name} statement: its columns weren't found`);
+    return mapping;
+  }
+  if (bank !== "none") {
+    const detected = detectBankFormat(rows);
+    if (detected) return detected.mapping;
+  }
+  return { ...guessMapping(rows), bank: null };
+}
+
+export function previewImport(userId: string, workspaceId: string, file: StatementFile, options: { mapping?: ColumnMapping | null; bank?: string | null; accountId?: string | null }): Promise<ImportPreview> {
   return withDb(async () => {
     await requireMembershipRole(userId, workspaceId);
     const rows = readStatement(file);
-    const mapping = options.mapping ?? guessMapping(rows);
+    const mapping = options.mapping ?? startingMapping(rows, options.bank);
     const parsed = mapRows(rows, mapping);
     const duplicates = await markDuplicates(oid(workspaceId), options.accountId ?? null, parsed);
     return {

@@ -25,6 +25,7 @@ export async function readImportForm(request: Request) {
   return {
     file: { name: file.name || "statement", bytes: Buffer.from(await file.arrayBuffer()) } satisfies StatementFile,
     mapping: mappingJson == null ? null : columnMappingSchema.parse(mappingJson),
+    bank: text("bank"),
     accountId: text("accountId"),
     categoryId: text("categoryId"),
     skipLines: z.array(z.number().int().min(1)).max(5000).parse(json("skipLines") ?? []),

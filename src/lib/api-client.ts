@@ -198,10 +198,11 @@ export const api = {
   bulkCreateTransactions(workspaceId: string, transactions: Array<Record<string, unknown>>) {
     return request<{ transactions: Transaction[] }>(`/api/workspaces/${workspaceId}/transactions/bulk-create`, { method: "POST", body: JSON.stringify({ transactions }) });
   },
-  previewImport(workspaceId: string, file: File, options: { mapping?: ColumnMapping | null; accountId?: string | null }) {
+  previewImport(workspaceId: string, file: File, options: { mapping?: ColumnMapping | null; bank?: string; accountId?: string | null }) {
     const form = new FormData();
     form.append("file", file);
     if (options.mapping) form.append("mapping", JSON.stringify(options.mapping));
+    if (options.bank) form.append("bank", options.bank);
     if (options.accountId) form.append("accountId", options.accountId);
     return request<{ preview: ImportPreview }>(`/api/workspaces/${workspaceId}/imports/preview`, { method: "POST", body: form });
   },

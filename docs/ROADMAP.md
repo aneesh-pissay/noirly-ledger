@@ -18,7 +18,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | --- | --- |
 | 1. Accounts and the money model | 10 / 10 |
 | 2. Budgeting | 9 / 9 |
-| 3. Transactions and imports | 7 / 11 |
+| 3. Transactions and imports | 8 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
 | 5. Team expense management | 0 / 10 |
 | 6. Reports and analytics | 0 / 9 |
@@ -86,7 +86,7 @@ _Needs Phase 1 subcategories and splits._
 - [x] UPI transaction reference field (S) — done 2026-10-23
 - [x] GST and tax categories on transactions (M) — done 2026-10-23
 - [x] CSV and XLSX statement import with preview, validation and rollback (L) — done 2026-10-23
-- [ ] Statement formats for major Indian banks (HDFC, ICICI, SBI, Axis, Kotak) (M)
+- [x] Statement formats for major Indian banks (HDFC, ICICI, SBI, Axis, Kotak) (M) — done 2026-10-23
 - [ ] PDF statement import (text-based PDFs; scanned ones need OCR in Phase 10) (L)
 - [ ] Duplicate transaction detection, on entry and on import (M)
 - [ ] Bulk receipt upload, and matching receipts to transactions by amount and date (M)
