@@ -3,6 +3,7 @@ import { createTransactionBodySchema } from "@/src/core/schemas/ledger";
 import { parseMajorToMinor } from "@/src/core/money";
 import type { TransactionType } from "@/src/core/models/enums";
 import { CLEARING_STATES, type Clearing } from "@/src/core/clearing";
+import { createInputFromBody } from "@/src/server/transactions/input";
 
 /** An amount filter as minor units; anything unreadable is ignored. */
 function minor(value: string | null) {
@@ -58,27 +59,7 @@ export async function POST(
     await assertObjectId(workspaceId, "workspaceId");
     const body = createTransactionBodySchema.parse(await request.json());
     const { sync } = await getLedgerProvider();
-    const transaction = await sync.createTransaction({
-      workspaceId,
-      type: body.type,
-      amountMinor: parseMajorToMinor(body.amountMajor),
-      currency: body.currency,
-      categoryId: body.categoryId ?? null,
-      accountId: body.accountId ?? null,
-      toAccountId: body.toAccountId ?? null,
-      refundOfId: body.refundOfId ?? null,
-      clearing: body.clearing,
-      tags: body.tags,
-      merchant: body.merchant,
-      projectId: body.projectId ?? null,
-      splits: body.splits ? body.splits.map((line) => ({ categoryId: line.categoryId, amountMinor: parseMajorToMinor(line.amountMajor), note: line.note ?? null })) : null,
-      toAmountMinor: body.toAmountMajor ? parseMajorToMinor(body.toAmountMajor) : null,
-      date: body.date,
-      note: body.note ?? null,
-      receiptUrl: body.receiptUrl ?? null,
-      receiptStorageKey: body.receiptStorageKey ?? null,
-      recurrence: body.recurrence ?? null,
-    });
+    const transaction = await sync.createTransaction(createInputFromBody(workspaceId, body));
     return jsonOk({ transaction }, 201);
   } catch (error) {
     return jsonError(error);

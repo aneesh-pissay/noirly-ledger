@@ -34,6 +34,7 @@ import type {
 import type { NumberFormat } from "@/src/core/locale-format";
 import type { ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
+import type { BulkChange } from "@/src/core/bulk";
 
 type ApiErrorBody = { error?: string; message?: string };
 
@@ -182,6 +183,12 @@ export const api = {
   },
   restoreBudgetRevision(revisionId: string) {
     return request<{ limitMinor: number }>(`/api/budget-revisions/${revisionId}/restore`, { method: "POST", body: "{}" });
+  },
+  bulkChangeTransactions(workspaceId: string, body: { ids: string[]; action: { kind: "delete" } | { kind: "update"; change: BulkChange } }) {
+    return request<{ done: number; failed: Array<{ id: string; error: string }> }>(`/api/workspaces/${workspaceId}/transactions/bulk`, { method: "POST", body: JSON.stringify(body) });
+  },
+  bulkCreateTransactions(workspaceId: string, transactions: Array<Record<string, unknown>>) {
+    return request<{ transactions: Transaction[] }>(`/api/workspaces/${workspaceId}/transactions/bulk-create`, { method: "POST", body: JSON.stringify({ transactions }) });
   },
   listViews(workspaceId: string) {
     return request<{ views: SavedView[] }>(`/api/workspaces/${workspaceId}/views`);

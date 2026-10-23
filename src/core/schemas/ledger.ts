@@ -9,6 +9,7 @@ import { CLEARING_STATES } from "@/src/core/clearing";
 import { NUMBER_FORMATS } from "@/src/core/locale-format";
 import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
 import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
+import { MAX_BULK, MAX_BULK_CREATE } from "@/src/core/bulk";
 
 export const currencyCode = z
   .string()
@@ -137,6 +138,30 @@ export const scenarioChangeSchema = z.discriminatedUnion("kind", [
 export const scenarioBodySchema = z.object({
   name: z.string().trim().min(1).max(80),
   changes: z.array(scenarioChangeSchema).max(30),
+});
+
+export const bulkChangeBodySchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(MAX_BULK),
+  action: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("delete") }),
+    z.object({
+      kind: z.literal("update"),
+      change: z
+        .object({
+          categoryId: z.string().min(1).nullable().optional(),
+          projectId: z.string().min(1).nullable().optional(),
+          clearing: z.enum(["pending", "cleared"]).optional(),
+          merchant: z.string().trim().max(120).nullable().optional(),
+          addTags: z.array(z.string().trim().max(40)).max(10).optional(),
+          removeTags: z.array(z.string().trim().max(40)).max(10).optional(),
+        })
+        .refine((change) => Object.keys(change).length > 0, { message: "Pick something to change" }),
+    }),
+  ]),
+});
+
+export const bulkCreateBodySchema = z.object({
+  transactions: z.array(createTransactionBodySchema).min(1).max(MAX_BULK_CREATE),
 });
 
 export const saveViewBodySchema = z.object({

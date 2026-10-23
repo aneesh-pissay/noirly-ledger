@@ -13,7 +13,9 @@ import { useUIStore } from "@/src/stores/ui-store";
 import type { Transaction } from "@/src/core/sync/types";
 import { RefundDialog } from "@/src/features/transactions/RefundDialog";
 import { CLEARING_LABEL } from "@/src/core/clearing";
-import { filtersFromParams } from "@/src/core/search";
+import { filtersFromParams, filtersToQuery } from "@/src/core/search";
+import { BulkBar } from "@/src/features/transactions/BulkBar";
+import { BulkCreateDialog } from "@/src/features/transactions/BulkCreateDialog";
 import { FiltersBar } from "@/src/features/transactions/FiltersBar";
 import type { TransactionType } from "@/src/core/models/enums";
 import { categoryTree } from "@/src/core/categories";
@@ -33,6 +35,7 @@ export function TransactionScreen({
   basePath,
 }: Props) {
   const setOpen = useUIStore((s) => s.setTransactionComposerOpen);
+  const [bulkAdding, setBulkAdding] = useState(false);
   const queryClient = useQueryClient();
   const parentRef = useRef<HTMLDivElement>(null);
   const categories = useQuery({
@@ -81,6 +84,16 @@ export function TransactionScreen({
   ].filter(Boolean);
 
   const [refunding, setRefunding] = useState<Transaction | null>(null);
+  // Picked rows for bulk changes; a new search starts with none picked.
+  const [selected, setSelected] = useState<{ key: string; ids: Set<string> }>({ key: "", ids: new Set() });
+  const selectionKey = filtersToQuery(filters);
+  const picked = selected.key === selectionKey ? selected.ids : new Set<string>();
+  const toggle = (id: string) => {
+    const next = new Set(picked);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected({ key: selectionKey, ids: next });
+  };
   const setClearing = useMutation({
     mutationFn: ({ id, clearing }: { id: string; clearing: "pending" | "cleared" }) => api.updateTransaction(id, { clearing }),
     onSuccess: () =>
@@ -126,8 +139,21 @@ export function TransactionScreen({
             </p>
           ) : null}
         </div>
-        <Button onClick={() => setOpen(true)}>Add</Button>
+        <div className="flex gap-2">
+          {!recurringOnly ? <Button variant="ghost" onClick={() => setBulkAdding(true)}>Add several</Button> : null}
+          <Button onClick={() => setOpen(true)}>Add</Button>
+        </div>
       </div>
+      <BulkCreateDialog workspaceId={workspaceId} baseCurrency={baseCurrency} open={bulkAdding} onClose={() => setBulkAdding(false)} categories={categories.data?.categories ?? []} />
+      {picked.size ? (
+        <BulkBar
+          workspaceId={workspaceId}
+          selectedIds={[...picked]}
+          categories={categories.data?.categories ?? []}
+          projects={projects.data?.projects ?? []}
+          onDone={() => setSelected({ key: selectionKey, ids: new Set() })}
+        />
+      ) : null}
       {!recurringOnly ? (
         <FiltersBar workspaceId={workspaceId} basePath={base} filters={filters} categories={categories.data?.categories ?? []} />
       ) : null}
@@ -139,8 +165,16 @@ export function TransactionScreen({
       <RefundDialog workspaceId={workspaceId} expense={refunding} onClose={() => setRefunding(null)} />
 
       <div className="mt-6 overflow-hidden rounded-xl border border-[var(--hairline)]">
-        <div className="grid grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
-          <span>Date</span>
+        <div className="grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+          <span className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              aria-label="Select all shown"
+              checked={items.length > 0 && items.every((t) => picked.has(t.id))}
+              onChange={(e) => setSelected({ key: selectionKey, ids: e.target.checked ? new Set(items.map((t) => t.id)) : new Set() })}
+            />
+            Date
+          </span>
           <span>Category</span>
           <span>Account</span>
           <span>Details</span>
@@ -168,13 +202,14 @@ export function TransactionScreen({
                 return (
                   <div
                     key={txn.id}
-                    className="absolute left-0 grid w-full grid-cols-[7rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
+                    className="absolute left-0 grid w-full grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                   >
-                    <span className="font-mono tabular-nums text-[var(--muted-foreground)]">
+                    <span className="flex items-center gap-2 font-mono tabular-nums text-[var(--muted-foreground)]">
+                      <input type="checkbox" aria-label={`Select ${txn.date} ${txn.note ?? txn.merchant ?? txn.type}`} checked={picked.has(txn.id)} onChange={() => toggle(txn.id)} />
                       {txn.date}
                     </span>
                     {txn.splits.length ? (
