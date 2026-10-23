@@ -209,9 +209,9 @@ export function PersonalDashboard({ workspaceId, baseCurrency, displayName }: Pr
         ) : (
           <ul>
             {budgets.map((row) => {
-              const ratio = row.budget.limitAmountMinor
-                ? row.spentMinor / row.budget.limitAmountMinor
-                : 0;
+              const ratio = row.availableMinor > 0
+                ? row.spentMinor / row.availableMinor
+                : row.spentMinor > 0 ? 1 : 0;
               const over = row.remainingMinor < 0;
               return (
                 <li

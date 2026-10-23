@@ -17,7 +17,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | Phase | Done |
 | --- | --- |
 | 1. Accounts and the money model | 10 / 10 |
-| 2. Budgeting | 1 / 9 |
+| 2. Budgeting | 2 / 9 |
 | 3. Transactions and imports | 0 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
 | 5. Team expense management | 0 / 10 |
@@ -68,7 +68,7 @@ _Everything after this builds on accounts. Today a transaction belongs to a work
 _Needs Phase 1 subcategories and splits._
 
 - [x] Yearly budget periods, alongside weekly, monthly and custom (S) — done 2026-10-23
-- [ ] Rollover and carry-forward of unspent (or overspent) amounts (M)
+- [x] Rollover and carry-forward of unspent (or overspent) amounts (M) — done 2026-10-23
 - [ ] Zero-based budgeting: give every rupee a job (M)
 - [ ] Envelope budgeting on top of accounts (M)
 - [ ] Budget templates and automatic renewal each period (M)

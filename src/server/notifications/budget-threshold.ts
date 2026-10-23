@@ -1,5 +1,4 @@
 import { Types } from "mongoose";
-import { isoDate, periodWindow } from "@/src/core/budgets/period";
 import { crossedThreshold } from "@/src/core/reports/format";
 import { withDb } from "@/src/server/db/mongodb";
 import {
@@ -9,8 +8,7 @@ import {
   WorkspaceMember,
 } from "@/src/server/models";
 import { notifyUsers } from "@/src/server/notifications/notify";
-import { spentInCategories } from "@/src/server/splits";
-import { budgetCategoryIds } from "@/src/server/categories/tree";
+import { budgetStatus } from "@/src/server/budgets";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 
 export async function maybeNotifyBudgetThreshold(input: {
@@ -40,25 +38,15 @@ export async function maybeNotifyBudgetThreshold(input: {
     const workspace = await Workspace.findById(new Types.ObjectId(input.workspaceId)).select("baseCurrency fiscalYearStartMonth").lean();
     const fiscalStart = workspace?.fiscalYearStartMonth ?? defaultFiscalStart(workspace?.baseCurrency ?? "");
     for (const budget of budgets) {
-      const window = periodWindow(budget.period, new Date(), {
-        start: budget.periodStart ? isoDate(budget.periodStart) : null,
-        end: budget.periodEnd ? isoDate(budget.periodEnd) : null,
-      }, fiscalStart);
-      const nextSpent = await spentInCategories(
-        {
-          workspaceId: new Types.ObjectId(input.workspaceId),
-          isPosted: true,
-          deletedAt: null,
-          date: { $gte: window.from, $lte: window.to },
-        },
-        await budgetCategoryIds(budget.categoryId),
-      );
+      // Measured against what's available this period, carry included.
+      const status = await budgetStatus(budget, fiscalStart);
+      const nextSpent = status.spentMinor;
       const previous = nextSpent - input.addedExpenseMinor;
       if (
         !crossedThreshold({
           previousSpentMinor: previous,
           nextSpentMinor: nextSpent,
-          limitAmountMinor: budget.limitAmountMinor,
+          limitAmountMinor: status.availableMinor,
           alertThresholdPct: budget.alertThresholdPct,
         })
       ) {

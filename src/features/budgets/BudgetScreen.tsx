@@ -10,6 +10,8 @@ import { Select } from "@/src/components/Select";
 import { ProgressBar } from "@/src/components/ProgressBar";
 import { MoneyText } from "@/src/components/MoneyText";
 import { categoryTree } from "@/src/core/categories";
+import { ROLLOVER_LABEL, ROLLOVER_MODES, type RolloverMode } from "@/src/core/budgets/rollover";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -18,6 +20,11 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
   const [categoryId, setCategoryId] = useState("");
   const [limitMajor, setLimitMajor] = useState("");
   const [period, setPeriod] = useState<"monthly" | "weekly" | "yearly">("monthly");
+  const [rollover, setRollover] = useState<RolloverMode>("none");
+  // Empty means "from the start of this period".
+  const [rolloverSince, setRolloverSince] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const { money } = useMoneyFormat();
 
   const categories = useQuery({
     queryKey: qk.categories(workspaceId),
@@ -30,9 +37,19 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
 
   const save = useMutation({
     mutationFn: () =>
-      api.upsertBudget(workspaceId, { categoryId, period, limitMajor, currency: baseCurrency }),
+      api.upsertBudget(workspaceId, {
+        categoryId,
+        period,
+        limitMajor,
+        currency: baseCurrency,
+        rollover,
+        rolloverSince: rollover !== "none" && rolloverSince ? rolloverSince : null,
+      }),
+    onMutate: () => setError(null),
+    onError: (err: Error) => setError(err.message),
     onSuccess: () => {
       setLimitMajor("");
+      setRolloverSince("");
       void queryClient.invalidateQueries({ queryKey: qk.dashboard(workspaceId, "mtd") });
       void queryClient.invalidateQueries({ queryKey: qk.budgets(workspaceId) });
     },
@@ -92,6 +109,20 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
             required
           />
         </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="b-rollover">At the end of a period</Label>
+          <Select id="b-rollover" value={rollover} onChange={(e) => setRollover(e.target.value as RolloverMode)}>
+            {ROLLOVER_MODES.map((mode) => <option key={mode} value={mode}>{ROLLOVER_LABEL[mode]}</option>)}
+          </Select>
+        </div>
+        {rollover !== "none" ? (
+          <div className="sm:col-span-2">
+            <Label htmlFor="b-since">Carry from (optional)</Label>
+            <Input id="b-since" type="date" className="font-mono" value={rolloverSince} onChange={(e) => setRolloverSince(e.target.value)} />
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">Leave empty to start carrying from this period.</p>
+          </div>
+        ) : null}
+        {error ? <p role="alert" className="text-sm text-[var(--balance-negative)] sm:col-span-4">{error}</p> : null}
         <Button type="submit" className="sm:col-span-4" disabled={save.isPending}>
           Save budget
         </Button>
@@ -99,9 +130,8 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
 
       <ul className="mt-8 space-y-4">
         {rows.map((row) => {
-          const ratio = row.budget.limitAmountMinor
-            ? row.spentMinor / row.budget.limitAmountMinor
-            : 0;
+          // Measured against what's available: the limit plus anything carried in.
+          const ratio = row.availableMinor > 0 ? row.spentMinor / row.availableMinor : row.spentMinor > 0 ? Infinity : 0;
           const over = ratio > 1;
           return (
             <li key={row.budget.id} className="surface grain rounded-[var(--r-lg)] p-4">
@@ -122,6 +152,16 @@ export function BudgetScreen({ workspaceId, baseCurrency }: Props) {
                   tone={over ? "negative" : "positive"}
                 />
               </div>
+              {row.budget.rollover !== "none" ? (
+                <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                  {row.carriedInMinor === 0
+                    ? "Nothing carried in"
+                    : row.carriedInMinor > 0
+                      ? `${money(row.carriedInMinor, row.budget.currency)} carried in, ${money(row.availableMinor, row.budget.currency)} available`
+                      : `${money(-row.carriedInMinor, row.budget.currency)} overspent before, ${money(row.availableMinor, row.budget.currency)} available`}
+                  {row.budget.rolloverSince ? ` · counting from ${row.budget.rolloverSince}` : ""}
+                </p>
+              ) : null}
             </li>
           );
         })}

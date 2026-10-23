@@ -7,6 +7,7 @@ import {
 import { ACCOUNT_KINDS } from "@/src/core/accounts";
 import { CLEARING_STATES } from "@/src/core/clearing";
 import { NUMBER_FORMATS } from "@/src/core/locale-format";
+import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
 
 export const currencyCode = z
   .string()
@@ -111,6 +112,8 @@ export const upsertBudgetBodySchema = z.object({
   limitMajor: amountMajorSchema,
   currency: currencyCode.optional(),
   alertThresholdPct: z.number().min(1).max(100).default(80),
+  rollover: z.enum(ROLLOVER_MODES).optional(),
+  rolloverSince: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
 
 export const upsertGoalBodySchema = z.object({

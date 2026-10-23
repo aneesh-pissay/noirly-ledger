@@ -10,6 +10,7 @@ import type { MoneyMinor } from "@/src/core/money";
 import type { AccountKind } from "@/src/core/accounts";
 import type { Clearing } from "@/src/core/clearing";
 import type { SplitLine } from "@/src/core/splits";
+import type { RolloverMode } from "@/src/core/budgets/rollover";
 
 export type {
   ApprovalStatus,
@@ -139,6 +140,9 @@ export type Budget = {
   limitAmountMinor: MoneyMinor;
   currency: string;
   alertThresholdPct: number;
+  /** What carries into the next period, counted from rolloverSince. */
+  rollover: RolloverMode;
+  rolloverSince: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -326,6 +330,9 @@ export type UpsertBudgetInput = {
   limitAmountMinor: number;
   currency?: string;
   alertThresholdPct?: number;
+  rollover?: RolloverMode;
+  /** The day carrying starts from; defaults to the start of the current period when rollover is turned on. */
+  rolloverSince?: string | null;
 };
 
 export type UpsertSavingsGoalInput = {
@@ -364,6 +371,9 @@ export type DashboardSummary = {
     budget: Budget;
     spentMinor: number;
     remainingMinor: number;
+    /** Carried in from earlier periods (negative when overspending carries), and limit plus that. */
+    carriedInMinor: number;
+    availableMinor: number;
     /** The current period's first and last days; a yearly budget runs over the financial year. */
     periodFrom: string;
     periodTo: string;

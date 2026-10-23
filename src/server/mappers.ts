@@ -1,5 +1,6 @@
 import { clearingOf } from "@/src/core/clearing";
 import { defaultFiscalStart } from "@/src/core/locale-format";
+import type { RolloverMode } from "@/src/core/budgets/rollover";
 import type {
   ApprovalRequest,
   Budget,
@@ -129,6 +130,8 @@ export function mapBudget(doc: BudgetDocument): Budget {
     limitAmountMinor: doc.limitAmountMinor,
     currency: doc.currency,
     alertThresholdPct: doc.alertThresholdPct,
+    rollover: (doc.rollover ?? "none") as RolloverMode,
+    rolloverSince: isoDay(doc.rolloverSince),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
   };

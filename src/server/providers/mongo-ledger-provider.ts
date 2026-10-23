@@ -73,12 +73,13 @@ import { expenseToRefund, refundedByExpense } from "@/src/server/refunds";
 import { spendSign } from "@/src/core/refunds";
 import { clearingOf, reconciledChange } from "@/src/core/clearing";
 import { checkParent, topLevelOf } from "@/src/core/categories";
-import { budgetCategoryIds } from "@/src/server/categories/tree";
+import { budgetStatus } from "@/src/server/budgets";
+import { canRollOver } from "@/src/core/budgets/rollover";
 import { labelFields } from "@/src/server/labels";
 import { assertTransactionProject } from "@/src/server/projects";
 import { merchantKey } from "@/src/core/labels";
 import { defaultFiscalStart } from "@/src/core/locale-format";
-import { assertSplits, refundSplits, spentInCategories, storedSplits, type StoredSplit } from "@/src/server/splits";
+import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
 
 type ProviderContext = {
   userId: string;
@@ -655,6 +656,29 @@ export function createMongoLedgerProvider(
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
         await requireAction(ctx.userId, input.workspaceId, "budget.manage");
         await assertCategory(workspace._id, input.categoryId);
+        if (input.rollover && input.rollover !== "none" && !canRollOver(input.period)) {
+          throw new ApiError(400, "invalid_request", "A custom budget covers one stretch of dates, so it can't roll over");
+        }
+        // Carrying counts from the day given, or from the start of this period when it's first turned on.
+        const fiscalStart = workspace.fiscalYearStartMonth ?? defaultFiscalStart(workspace.baseCurrency);
+        const existing = await BudgetModel.findOne({
+          workspaceId: workspace._id,
+          categoryId: oid(input.categoryId),
+          period: input.period,
+          periodStart: input.periodStart ? new Date(input.periodStart) : null,
+        }).select("rollover rolloverSince").lean();
+        const rolloverFields: Record<string, unknown> = {};
+        if (input.rollover !== undefined) {
+          rolloverFields.rollover = input.rollover;
+          rolloverFields.rolloverSince =
+            input.rollover === "none"
+              ? null
+              : input.rolloverSince
+                ? new Date(`${input.rolloverSince}T00:00:00.000Z`)
+                : existing?.rolloverSince ?? periodWindow(input.period, new Date(), undefined, fiscalStart).from;
+        } else if (input.rolloverSince !== undefined && existing?.rollover && existing.rollover !== "none") {
+          rolloverFields.rolloverSince = input.rolloverSince ? new Date(`${input.rolloverSince}T00:00:00.000Z`) : null;
+        }
         const doc = await BudgetModel.findOneAndUpdate(
           {
             workspaceId: workspace._id,
@@ -668,6 +692,7 @@ export function createMongoLedgerProvider(
               limitAmountMinor: input.limitAmountMinor,
               currency: (input.currency ?? workspace.baseCurrency).toUpperCase(),
               alertThresholdPct: input.alertThresholdPct ?? 80,
+              ...rolloverFields,
             },
             $setOnInsert: {
               workspaceId: workspace._id,
@@ -1184,20 +1209,15 @@ export function createMongoLedgerProvider(
 
         const budgetRows = await Promise.all(
           budgets.map(async (budget) => {
-            const window = periodWindow(budget.period, new Date(), {
-              start: budget.periodStart ? isoDate(budget.periodStart) : null,
-              end: budget.periodEnd ? isoDate(budget.periodEnd) : null,
-            }, workspace.fiscalYearStartMonth ?? defaultFiscalStart(workspace.baseCurrency));
-            const spentMinor = await spentInCategories(
-              { workspaceId: workspace._id, isPosted: true, deletedAt: null, date: { $gte: window.from, $lte: window.to } },
-              await budgetCategoryIds(budget.categoryId),
-            );
+            const status = await budgetStatus(budget, workspace.fiscalYearStartMonth ?? defaultFiscalStart(workspace.baseCurrency));
             return {
               budget: mapBudget(budget),
-              spentMinor,
-              remainingMinor: budget.limitAmountMinor - spentMinor,
-              periodFrom: isoDate(window.from),
-              periodTo: isoDate(window.to),
+              spentMinor: status.spentMinor,
+              remainingMinor: status.remainingMinor,
+              carriedInMinor: status.carriedInMinor,
+              availableMinor: status.availableMinor,
+              periodFrom: isoDate(status.window.from),
+              periodTo: isoDate(status.window.to),
             };
           }),
         );

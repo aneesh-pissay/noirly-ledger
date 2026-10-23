@@ -7,6 +7,7 @@ import {
   type Types,
 } from "mongoose";
 import { BUDGET_PERIODS } from "@/src/core/models/enums";
+import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
 
 const budgetSchema = new Schema(
   {
@@ -28,6 +29,9 @@ const budgetSchema = new Schema(
     limitAmountMinor: { type: Number, required: true },
     currency: { type: String, required: true, uppercase: true, trim: true },
     alertThresholdPct: { type: Number, required: true, default: 80 },
+    // What happens to what's left at the end of a period (see src/core/budgets/rollover.ts), counted from rolloverSince.
+    rollover: { type: String, enum: ROLLOVER_MODES, default: "none" },
+    rolloverSince: { type: Date, default: null },
   },
   { timestamps: true },
 );
