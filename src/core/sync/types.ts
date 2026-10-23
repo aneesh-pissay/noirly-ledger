@@ -15,6 +15,7 @@ import type { RevisionReason } from "@/src/core/budgets/revisions";
 import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { ViewFilters } from "@/src/core/search";
+import type { FieldChange, HistoryAction } from "@/src/core/history";
 
 export type {
   ApprovalStatus,
@@ -93,6 +94,8 @@ export type Transaction = {
   refundedMinor: MoneyMinor;
   /** Against the bank: pending, cleared, or reconciled to a statement. */
   clearing: Clearing;
+  /** Files kept with it besides the receipt. */
+  attachmentCount: number;
   /** EMI payments: the plan and which payment (0 the processing fee, -1 paying off early). */
   installmentPlanId: string | null;
   installmentNumber: number | null;
@@ -382,6 +385,15 @@ export type ForecastBaselineResult = {
   /** Each top-level category's monthly spending and where it came from. */
   lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; source: "recent" | "budget" }>;
   missingRates: string[];
+};
+
+/** A transaction's files, comments and change history, newest first. */
+export type TransactionActivity = {
+  /** Whether the person looking may add or remove files. */
+  canEdit: boolean;
+  attachments: Array<{ id: string; name: string; contentType: string; size: number; url: string; uploadedAt: string }>;
+  comments: Array<{ id: string; body: string; authorName: string; createdAt: string; canDelete: boolean }>;
+  history: Array<{ id: string; action: HistoryAction; changes: FieldChange[]; detail: string | null; actorName: string; createdAt: string }>;
 };
 
 export type InstallmentPlanSummary = {

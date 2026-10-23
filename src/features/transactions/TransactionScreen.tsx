@@ -17,6 +17,7 @@ import { filtersFromParams, filtersToQuery } from "@/src/core/search";
 import { BulkBar } from "@/src/features/transactions/BulkBar";
 import { BulkCreateDialog } from "@/src/features/transactions/BulkCreateDialog";
 import { EmiPanel } from "@/src/features/installments/EmiPanel";
+import { TransactionDetails } from "@/src/features/transactions/TransactionDetails";
 import { FiltersBar } from "@/src/features/transactions/FiltersBar";
 import type { TransactionType } from "@/src/core/models/enums";
 import { categoryTree } from "@/src/core/categories";
@@ -85,6 +86,7 @@ export function TransactionScreen({
   ].filter(Boolean);
 
   const [refunding, setRefunding] = useState<Transaction | null>(null);
+  const [details, setDetails] = useState<Transaction | null>(null);
   // Picked rows for bulk changes; a new search starts with none picked.
   const [selected, setSelected] = useState<{ key: string; ids: Set<string> }>({ key: "", ids: new Set() });
   const selectionKey = filtersToQuery(filters);
@@ -164,6 +166,14 @@ export function TransactionScreen({
         </p>
       ) : null}
       <RefundDialog workspaceId={workspaceId} expense={refunding} onClose={() => setRefunding(null)} />
+      <TransactionDetails
+        workspaceId={workspaceId}
+        transaction={details}
+        onClose={() => setDetails(null)}
+        categoryName={categoryName}
+        accountName={accountName}
+        projectName={projectName}
+      />
       {recurringOnly ? (
         <div className="mt-6">
           <EmiPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
@@ -171,7 +181,7 @@ export function TransactionScreen({
       ) : null}
 
       <div className="mt-6 overflow-hidden rounded-xl border border-[var(--hairline)]">
-        <div className="grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
+        <div className="grid grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_9rem] gap-x-3 border-b border-[var(--hairline)] bg-[var(--surface)] px-4 py-3 text-[11px] uppercase tracking-wide text-[var(--muted-foreground)]">
           <span className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -208,7 +218,7 @@ export function TransactionScreen({
                 return (
                   <div
                     key={txn.id}
-                    className="absolute left-0 grid w-full grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_7rem] gap-x-3 items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
+                    className="absolute left-0 grid w-full grid-cols-[8.5rem_minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)_6rem_6rem_7rem_9rem] gap-x-3 items-center border-b border-[var(--hairline)] px-4 text-sm last:border-0"
                     style={{
                       height: `${virtualRow.size}px`,
                       transform: `translateY(${virtualRow.start}px)`,
@@ -288,6 +298,14 @@ export function TransactionScreen({
                       />
                     </span>
                     <span className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        aria-label={`Details for ${txn.date} ${txn.note ?? txn.merchant ?? txn.type}`}
+                        className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                        onClick={() => setDetails(txn)}
+                      >
+                        Details{txn.attachmentCount ? ` · ${txn.attachmentCount}` : ""}
+                      </button>
                       {refundable ? (
                         <button
                           type="button"

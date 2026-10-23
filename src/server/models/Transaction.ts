@@ -33,6 +33,16 @@ const splitSchema = new Schema(
   { _id: false },
 );
 
+// A file kept with a transaction (receipts, invoices, warranties), stored like receipts.
+const attachmentSchema = new Schema({
+  storageKey: { type: String, required: true },
+  name: { type: String, required: true },
+  contentType: { type: String, required: true },
+  size: { type: Number, required: true },
+  uploadedById: { type: Schema.Types.ObjectId, ref: "LedgerUser", required: true },
+  uploadedAt: { type: Date, required: true },
+});
+
 const transactionSchema = new Schema(
   {
     workspaceId: {
@@ -91,6 +101,8 @@ const transactionSchema = new Schema(
     // EMI payments: the plan, and which payment (0 the processing fee, -1 paying off early).
     installmentPlanId: { type: Schema.Types.ObjectId, ref: "InstallmentPlan", default: null, index: true },
     installmentNumber: { type: Number, default: null },
+    // More files besides the receipt; see src/server/transaction-activity.ts.
+    attachments: { type: [attachmentSchema], default: [] },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

@@ -24,6 +24,12 @@ export { Scenario, type ScenarioDocument } from "./Scenario";
 export { TransactionView, type TransactionViewDocument } from "./TransactionView";
 export { InstallmentPlan, type InstallmentPlanDocument } from "./InstallmentPlan";
 export {
+  TransactionChange,
+  TransactionComment,
+  type TransactionChangeDocument,
+  type TransactionCommentDocument,
+} from "./TransactionActivity";
+export {
   WorkspaceInvite,
   type WorkspaceInviteDocument,
 } from "./WorkspaceInvite";

@@ -80,6 +80,8 @@ import { labelFields } from "@/src/server/labels";
 import { assertTransactionProject } from "@/src/server/projects";
 import { merchantKey } from "@/src/core/labels";
 import { escapeRegex, parseSearch } from "@/src/core/search";
+import { diffSnapshots, snapshotOf } from "@/src/core/history";
+import { recordChange } from "@/src/server/transaction-activity";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
 
@@ -485,6 +487,7 @@ export function createMongoLedgerProvider(
             });
           }
         }
+        await recordChange({ workspaceId: workspace._id, transactionId: doc._id, actorId: ctx.userId, action: "created" });
         return mapTransaction(doc);
       });
     },
@@ -498,6 +501,7 @@ export function createMongoLedgerProvider(
         if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
         const workspace = await requireWorkspace(ctx.userId, doc.workspaceId.toString());
         await requireTransactionEditor(ctx.userId, doc);
+        const before = snapshotOf(mapTransaction(doc));
         // A pool expense is reviewed as submitted; changing it afterwards would
         // skip approval and leave the pool's total wrong.
         if (doc.budgetPoolId) {
@@ -624,6 +628,8 @@ export function createMongoLedgerProvider(
         }
         doc.set("splits", storedSplits(lines, doc.baseAmountMinor));
         await doc.save();
+        const changes = diffSnapshots(before, snapshotOf(mapTransaction(doc)));
+        if (changes.length) await recordChange({ workspaceId: doc.workspaceId, transactionId: doc._id, actorId: ctx.userId, action: "updated", changes });
         return (await withRefunded([mapTransaction(doc)]))[0]!;
       });
     },
@@ -652,6 +658,7 @@ export function createMongoLedgerProvider(
           { $set: { deletedAt: new Date() } },
         );
         if (!claimed) throw new ApiError(404, "not_found", "Transaction not found");
+        await recordChange({ workspaceId: doc.workspaceId, transactionId: doc._id, actorId: ctx.userId, action: "deleted" });
         if (doc.budgetPoolId && doc.approvalRequestId) {
           const approval = await ApprovalModel.findById(doc.approvalRequestId);
           if (approval?.status === "approved") {

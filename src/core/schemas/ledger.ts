@@ -155,6 +155,15 @@ export const installmentPlanBodySchema = z.object({
 
 export const closeInstallmentBodySchema = z.object({ chargeMajor: amountMajorSchema.nullable().optional() });
 
+export const attachmentBodySchema = z.object({
+  storageKey: z.string().min(1).max(512),
+  name: z.string().trim().min(1).max(120),
+  contentType: z.string().trim().min(1).max(100),
+  size: z.number().int().min(0).max(20 * 1024 * 1024),
+});
+
+export const commentBodySchema = z.object({ body: z.string().trim().min(1).max(2000) });
+
 export const bulkChangeBodySchema = z.object({
   ids: z.array(z.string().min(1)).min(1).max(MAX_BULK),
   action: z.discriminatedUnion("kind", [

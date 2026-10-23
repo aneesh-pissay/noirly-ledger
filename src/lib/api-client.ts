@@ -9,6 +9,7 @@ import type {
   SavedScenario,
   SavedView,
   InstallmentPlanSummary,
+  TransactionActivity,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -190,6 +191,21 @@ export const api = {
   },
   bulkCreateTransactions(workspaceId: string, transactions: Array<Record<string, unknown>>) {
     return request<{ transactions: Transaction[] }>(`/api/workspaces/${workspaceId}/transactions/bulk-create`, { method: "POST", body: JSON.stringify({ transactions }) });
+  },
+  getTransactionActivity(transactionId: string) {
+    return request<{ activity: TransactionActivity }>(`/api/transactions/${transactionId}/activity`);
+  },
+  addAttachment(transactionId: string, body: { storageKey: string; name: string; contentType: string; size: number }) {
+    return request<{ ok: boolean }>(`/api/transactions/${transactionId}/attachments`, { method: "POST", body: JSON.stringify(body) });
+  },
+  removeAttachment(transactionId: string, attachmentId: string) {
+    return request<{ ok: boolean }>(`/api/transactions/${transactionId}/attachments/${attachmentId}`, { method: "DELETE" });
+  },
+  addComment(transactionId: string, body: string) {
+    return request<{ ok: boolean }>(`/api/transactions/${transactionId}/comments`, { method: "POST", body: JSON.stringify({ body }) });
+  },
+  deleteComment(commentId: string) {
+    return request<{ ok: boolean }>(`/api/comments/${commentId}`, { method: "DELETE" });
   },
   listInstallmentPlans(workspaceId: string) {
     return request<{ plans: InstallmentPlanSummary[] }>(`/api/workspaces/${workspaceId}/installments`);
