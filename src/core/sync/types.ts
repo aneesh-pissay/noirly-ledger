@@ -338,6 +338,20 @@ export type UpsertBudgetInput = {
   renew?: boolean;
 };
 
+/** What an expense being entered would do to one budget. */
+export type BudgetImpact = {
+  budgetId: string;
+  categoryId: string;
+  period: BudgetPeriod;
+  availableMinor: MoneyMinor;
+  spentMinor: MoneyMinor;
+  addMinor: MoneyMinor;
+  /** Left after this expense (negative when over). */
+  leftMinor: MoneyMinor;
+  state: "ok" | "near" | "over";
+  alreadyOver: boolean;
+};
+
 export type BudgetTemplateSummary = {
   id: string;
   name: string;

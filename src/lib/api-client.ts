@@ -3,6 +3,7 @@ import type {
   NetWorth,
   MonthPlan,
   BudgetTemplateSummary,
+  BudgetImpact,
   EnvelopeState,
   EnvelopeMoveRecord,
   Project,
@@ -155,6 +156,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     });
+  },
+  checkBudgets(workspaceId: string, body: { lines: Array<{ categoryId: string; amountMajor: string }>; currency: string; date: string }) {
+    return request<{ impacts: BudgetImpact[]; missingRate: boolean }>(`/api/workspaces/${workspaceId}/budget-check`, { method: "POST", body: JSON.stringify(body) });
   },
   listBudgetTemplates(workspaceId: string) {
     return request<{ templates: BudgetTemplateSummary[] }>(`/api/workspaces/${workspaceId}/budget-templates`);

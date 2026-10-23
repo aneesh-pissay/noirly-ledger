@@ -17,7 +17,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | Phase | Done |
 | --- | --- |
 | 1. Accounts and the money model | 10 / 10 |
-| 2. Budgeting | 5 / 9 |
+| 2. Budgeting | 6 / 9 |
 | 3. Transactions and imports | 0 / 11 |
 | 4. Bills, subscriptions, savings and debt | 0 / 13 |
 | 5. Team expense management | 0 / 10 |
@@ -72,7 +72,7 @@ _Needs Phase 1 subcategories and splits._
 - [x] Zero-based budgeting: give every rupee a job (M) — done 2026-10-23
 - [x] Envelope budgeting on top of accounts (M) — done 2026-10-23
 - [x] Budget templates and automatic renewal each period (M) — done 2026-10-23
-- [ ] Real-time overspending warnings as you enter a transaction (S)
+- [x] Real-time overspending warnings as you enter a transaction (S) — done 2026-10-23
 - [ ] Moving money between budgets, with revisions and version history (M)
 - [ ] What-if scenarios and forecasts (L)
 - [ ] Separate personal, household and business views (household and business as workspace kinds) (M)

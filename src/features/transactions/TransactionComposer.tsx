@@ -14,6 +14,7 @@ import { Select } from "@/src/components/Select";
 import { useUIStore } from "@/src/stores/ui-store";
 import { categoryTree } from "@/src/core/categories";
 import { parseTagInput } from "@/src/core/labels";
+import { BudgetWarning } from "@/src/features/transactions/BudgetWarning";
 
 type FormValues = {
   type: "expense" | "income" | "transfer";
@@ -154,6 +155,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
   const txType = useWatch({ control: form.control, name: "type" });
   const isTransfer = txType === "transfer";
   const amountMajor = useWatch({ control: form.control, name: "amountMajor" });
+  const watchedCategory = useWatch({ control: form.control, name: "categoryId" });
+  const watchedCurrency = useWatch({ control: form.control, name: "currency" });
+  const watchedDate = useWatch({ control: form.control, name: "date" });
   // What's left to give a line, so the split can be balanced before saving.
   const splitLeft = (() => {
     if (!lines) return "";
@@ -340,6 +344,22 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             </Select>
           </div>
         )}
+        {txType === "expense" ? (
+          <BudgetWarning
+            workspaceId={workspaceId}
+            baseCurrency={baseCurrency}
+            lines={
+              lines
+                ? lines.filter((line) => line.categoryId).map((line) => ({ categoryId: line.categoryId, amountMajor: line.amountMajor }))
+                : watchedCategory
+                  ? [{ categoryId: watchedCategory, amountMajor }]
+                  : []
+            }
+            currency={chosenAccount?.currency ?? watchedCurrency}
+            date={watchedDate}
+            categoryName={(id) => categoryTree(categories.data?.categories ?? []).find((c) => c.id === id)?.label ?? "This category"}
+          />
+        ) : null}
         <div className={openProjects.length ? "grid grid-cols-2 gap-3" : undefined}>
           <div>
             <Label htmlFor="merchant">{txType === "income" ? "Paid by" : "Merchant"}</Label>
