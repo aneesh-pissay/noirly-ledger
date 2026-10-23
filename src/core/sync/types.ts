@@ -445,6 +445,32 @@ export type Project = {
 export type TagSummary = { tag: string; count: number };
 export type MerchantSummary = { key: string; name: string; count: number; spentMinor: MoneyMinor };
 
+/** Envelopes on top of accounts, in base currency; see src/core/envelopes.ts. */
+export type EnvelopeState = {
+  started: boolean;
+  since: string | null;
+  baseCurrency: string;
+  readyToAssignMinor: MoneyMinor;
+  /** Cash, bank and wallet balances today, and what's owed on credit cards. */
+  cashMinor: MoneyMinor;
+  cardDebtMinor: MoneyMinor;
+  /** Spending since the start with no envelope (uncategorized); it came out of Ready to assign. */
+  uncategorizedSpentMinor: MoneyMinor;
+  /** One per top-level category. */
+  envelopes: Array<{ categoryId: string; fundedMinor: MoneyMinor; spentMinor: MoneyMinor; balanceMinor: MoneyMinor }>;
+  missingRates: string[];
+};
+
+export type EnvelopeMoveRecord = {
+  id: string;
+  /** null is Ready to assign. */
+  fromCategoryId: string | null;
+  toCategoryId: string | null;
+  amountMinor: MoneyMinor;
+  note: string | null;
+  createdAt: string;
+};
+
 /** A month's zero-based plan in base currency: income to plan with, what budgets assign, and what's left. */
 export type MonthPlan = {
   month: string;

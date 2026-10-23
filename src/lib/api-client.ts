@@ -2,6 +2,8 @@ import type {
   Account,
   NetWorth,
   MonthPlan,
+  EnvelopeState,
+  EnvelopeMoveRecord,
   Project,
   TagSummary,
   MerchantSummary,
@@ -184,6 +186,15 @@ export const api = {
   },
   listMerchants(workspaceId: string) {
     return request<{ merchants: MerchantSummary[] }>(`/api/workspaces/${workspaceId}/merchants`);
+  },
+  getEnvelopes(workspaceId: string) {
+    return request<{ envelopes: EnvelopeState; moves: EnvelopeMoveRecord[] }>(`/api/workspaces/${workspaceId}/envelopes`);
+  },
+  startEnvelopes(workspaceId: string, since: string) {
+    return request<{ envelopes: EnvelopeState }>(`/api/workspaces/${workspaceId}/envelopes`, { method: "PUT", body: JSON.stringify({ since }) });
+  },
+  moveEnvelopeMoney(workspaceId: string, body: { fromCategoryId: string | null; toCategoryId: string | null; amountMajor: string; note?: string | null }) {
+    return request<{ envelopes: EnvelopeState }>(`/api/workspaces/${workspaceId}/envelopes/moves`, { method: "POST", body: JSON.stringify(body) });
   },
   getMonthPlan(workspaceId: string, month: string) {
     return request<{ plan: MonthPlan }>(`/api/workspaces/${workspaceId}/plan?month=${month}`);

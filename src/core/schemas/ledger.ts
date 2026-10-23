@@ -195,6 +195,17 @@ export const meSettingsBodySchema = z.object({
   numberFormat: z.enum(NUMBER_FORMATS),
 });
 
+export const envelopeStartBodySchema = z.object({
+  since: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const envelopeMoveBodySchema = z.object({
+  fromCategoryId: z.string().min(1).nullable(),
+  toCategoryId: z.string().min(1).nullable(),
+  amountMajor: amountMajorSchema,
+  note: z.string().trim().max(200).nullable().optional(),
+});
+
 export const monthPlanBodySchema = z.object({
   month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
   expectedIncomeMajor: amountMajorSchema.nullable(),

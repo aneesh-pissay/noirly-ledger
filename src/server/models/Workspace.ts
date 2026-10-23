@@ -33,6 +33,8 @@ const workspaceSchema = new Schema(
     },
     // Month (1–12) the financial year starts in; unset means the default for the base currency (see src/core/locale-format.ts).
     fiscalYearStartMonth: { type: Number, min: 1, max: 12, default: null },
+    // When envelope budgeting started; null until it's turned on (see src/server/envelopes.ts).
+    envelopesSince: { type: Date, default: null },
   },
   { timestamps: true },
 );
