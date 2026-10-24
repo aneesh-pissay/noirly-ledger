@@ -5,6 +5,8 @@ import { Account as AccountModel, ImportBatch, Transaction as TransactionModel, 
 import { requireMembershipRole } from "@/src/server/workspace/members";
 import { bulkCreateTransactions } from "@/src/server/bulk";
 import { readXlsx } from "@/src/server/imports/xlsx";
+import { candidateOf, nearbyTransactions } from "@/src/server/duplicates";
+import { duplicateReason } from "@/src/core/duplicates";
 import { bankFormat, detectBankFormat, findBankFormat } from "@/src/core/bank-formats";
 import { guessMapping, mapRows, MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, parseCsv, type ColumnMapping, type ImportRow } from "@/src/core/imports";
 import type { CreateTransactionInput, ImportBatchSummary, ImportPreview, LedgerSyncProvider } from "@/src/core/sync/types";
@@ -32,30 +34,40 @@ export function readStatement(file: StatementFile): string[][] {
 }
 
 /**
- * Rows that look like ones already recorded: the same day and amount (in the
- * chosen account, when there is one), or the same UPI reference.
+ * Rows that look like ones already recorded, by the same rules as entering
+ * one (src/core/duplicates.ts): the same UPI reference, or the same amount
+ * in or out (in the chosen account, when there is one) on the same day, or
+ * a few days off with a matching description.
  */
 async function markDuplicates(workspaceId: Types.ObjectId, accountId: string | null, rows: ImportRow[]) {
   const dated = rows.filter((r) => r.date && r.amountMinor);
-  if (!dated.length) return new Set<number>();
-  const days = dated.map((r) => r.date!).sort();
   const refs = rows.map((r) => r.reference?.replace(/[\s-]/g, "")).filter((r): r is string => Boolean(r && /^\d{12}$/.test(r)));
-  const existing = await TransactionModel.find({
-    workspaceId,
-    deletedAt: null,
-    $or: [
-      { date: { $gte: new Date(`${days[0]}T00:00:00.000Z`), $lte: new Date(`${days.at(-1)}T23:59:59.999Z`) }, ...(accountId ? { accountId: oid(accountId) } : {}) },
-      ...(refs.length ? [{ upiRef: { $in: refs } }] : []),
-    ],
-  })
-    .select("date amountMinor type upiRef")
-    .lean();
-  const seen = new Set(existing.map((t) => `${t.date.toISOString().slice(0, 10)}|${t.type === "income" || t.type === "refund" ? t.amountMinor : -t.amountMinor}`));
-  const usedRefs = new Set(existing.map((t) => t.upiRef).filter(Boolean));
+  if (!dated.length && !refs.length) return new Set<number>();
+  const days = dated.map((r) => r.date!).sort();
+  const existing = (
+    await nearbyTransactions(workspaceId, {
+      from: days[0] ?? "9999-12-31",
+      to: days.at(-1) ?? "0000-01-01",
+      amounts: dated.flatMap((r) => (r.amountMinor! < 0 ? (["expense", "transfer"] as const) : (["income", "refund"] as const)).map((type) => ({ type, amountMinor: Math.abs(r.amountMinor!) }))),
+      upiRefs: refs,
+    })
+  )
+    .filter((doc) => !accountId || doc.upiRef || !doc.accountId || String(doc.accountId) === accountId)
+    // Money out of the account or into it, as a statement sees it.
+    .map((doc) => ({ ...candidateOf(doc), type: doc.type === "expense" || doc.type === "transfer" ? "out" : "in" }));
   const duplicates = new Set<number>();
   for (const row of rows) {
-    const ref = row.reference?.replace(/[\s-]/g, "");
-    if ((row.date && row.amountMinor && seen.has(`${row.date}|${row.amountMinor}`)) || (ref && usedRefs.has(ref))) duplicates.add(row.line);
+    const ref = row.reference?.replace(/[\s-]/g, "") ?? "";
+    const candidate = {
+      type: (row.amountMinor ?? 0) < 0 ? "out" : "in",
+      amountMinor: Math.abs(row.amountMinor ?? 0),
+      date: row.date ?? "",
+      accountId,
+      text: row.description,
+      upiRef: /^\d{12}$/.test(ref) ? ref : null,
+    };
+    const matched = existing.some((doc) => (row.date && row.amountMinor) || candidate.upiRef ? duplicateReason({ ...candidate, currency: doc.currency }, doc) != null : false);
+    if (matched) duplicates.add(row.line);
   }
   return duplicates;
 }

@@ -235,6 +235,19 @@ export const budgetMoveBodySchema = z.object({
 });
 
 /** An expense being entered, to check against its budgets: one line, or a split's lines. */
+export const duplicateCheckBodySchema = z.object({
+  type: z.enum(["expense", "income", "transfer", "refund"]),
+  amountMajor: amountMajorSchema,
+  currency: currencyCode,
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  accountId: z.string().min(1).max(64).nullable().optional(),
+  text: z.string().max(500).optional(),
+  upiRef: z.string().max(40).nullable().optional(),
+  exceptId: z.string().min(1).max(64).nullable().optional(),
+});
+
+export const notDuplicateBodySchema = z.object({ otherId: z.string().min(1).max(64) });
+
 export const budgetCheckBodySchema = z.object({
   lines: z.array(z.object({ categoryId: z.string().min(1), amountMajor: amountMajorSchema })).min(1).max(20),
   currency: currencyCode,

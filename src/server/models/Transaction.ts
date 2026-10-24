@@ -128,6 +128,8 @@ const transactionSchema = new Schema(
     upiRef: { type: String, default: null },
     upiId: { type: String, default: null },
     gst: { type: gstSchema, default: null },
+    // Transactions someone said are separate payments, though they look alike (see src/server/duplicates.ts).
+    notDuplicateOf: { type: [Schema.Types.ObjectId], default: [] },
     date: { type: Date, required: true, index: true },
     note: { type: String, default: null },
     receiptUrl: { type: String, default: null },

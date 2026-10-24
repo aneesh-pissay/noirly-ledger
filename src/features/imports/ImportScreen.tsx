@@ -59,6 +59,7 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
       setFile(null);
       void queryClient.invalidateQueries({ queryKey: ["imports", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: ["duplicates", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) });
     },
     onError: (err: Error) => setError(err.message),
@@ -69,6 +70,7 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
       setDone("Import undone.");
       void queryClient.invalidateQueries({ queryKey: ["imports", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] });
+      void queryClient.invalidateQueries({ queryKey: ["duplicates", workspaceId] });
       void queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) });
     },
     onError: (err: Error) => setError(err.message),

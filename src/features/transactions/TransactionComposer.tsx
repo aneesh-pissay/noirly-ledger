@@ -15,6 +15,7 @@ import { useUIStore } from "@/src/stores/ui-store";
 import { categoryTree } from "@/src/core/categories";
 import { parseTagInput } from "@/src/core/labels";
 import { BudgetWarning } from "@/src/features/transactions/BudgetWarning";
+import { DuplicateWarning } from "@/src/features/transactions/DuplicateWarning";
 import { GST_RATES, GST_SUPPLIES, GST_SUPPLY_LABEL, GST_TREATMENTS, GST_TREATMENT_LABEL, gstAmounts, type GstSupply, type GstTreatment } from "@/src/core/gst";
 
 const NO_GST = { gstOn: false, gstRate: "18", gstTreatment: "taxable" as GstTreatment, gstSupply: "intra" as GstSupply, gstin: "", hsn: "", itc: false };
@@ -154,6 +155,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         queryClient.invalidateQueries({ queryKey: qk.budgets(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: ["labels", workspaceId] }),
+        queryClient.invalidateQueries({ queryKey: ["duplicates", workspaceId] }),
       ]);
       form.reset({
         type: "expense",
@@ -208,6 +210,9 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
   })();
   const watchedCurrency = useWatch({ control: form.control, name: "currency" });
   const watchedDate = useWatch({ control: form.control, name: "date" });
+  const watchedMerchant = useWatch({ control: form.control, name: "merchant" });
+  const watchedNote = useWatch({ control: form.control, name: "note" });
+  const watchedUpiRef = useWatch({ control: form.control, name: "upiRef" });
   // What's left to give a line, so the split can be balanced before saving.
   const splitLeft = (() => {
     if (!lines) return "";
@@ -539,6 +544,13 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
             <p className="mt-1 font-mono text-[11px] text-[var(--balance-positive)]">Receipt attached</p>
           ) : null}
         </div>
+        {open ? (
+          <DuplicateWarning
+            workspaceId={workspaceId}
+            draft={{ type: txType, amountMajor, currency: chosenAccount?.currency ?? watchedCurrency, date: watchedDate, accountId, merchant: watchedMerchant, note: watchedNote, upiRef: watchedUpiRef }}
+            accountName={(id) => openAccounts.find((account) => account.id === id)?.name ?? "an account"}
+          />
+        ) : null}
         {error ? <p className="text-sm text-[var(--balance-negative)]">{error}</p> : null}
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={() => setOpen(false)}>

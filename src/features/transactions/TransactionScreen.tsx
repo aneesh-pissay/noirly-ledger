@@ -18,6 +18,7 @@ import { BulkBar } from "@/src/features/transactions/BulkBar";
 import { BulkCreateDialog } from "@/src/features/transactions/BulkCreateDialog";
 import { EmiPanel } from "@/src/features/installments/EmiPanel";
 import { TransactionDetails } from "@/src/features/transactions/TransactionDetails";
+import { DuplicatesPanel } from "@/src/features/transactions/DuplicatesPanel";
 import { FiltersBar } from "@/src/features/transactions/FiltersBar";
 import type { TransactionType } from "@/src/core/models/enums";
 import { categoryTree } from "@/src/core/categories";
@@ -109,6 +110,7 @@ export function TransactionScreen({
     mutationFn: (id: string) => api.deleteTransaction(id),
     onSuccess: () =>
       Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["duplicates", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
       ]),
@@ -158,6 +160,7 @@ export function TransactionScreen({
           onDone={() => setSelected({ key: selectionKey, ids: new Set() })}
         />
       ) : null}
+      {!recurringOnly ? <DuplicatesPanel workspaceId={workspaceId} accountName={accountName} /> : null}
       {!recurringOnly ? (
         <FiltersBar workspaceId={workspaceId} basePath={base} filters={filters} categories={categories.data?.categories ?? []} />
       ) : null}

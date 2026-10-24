@@ -40,6 +40,7 @@ import type { ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { BulkChange } from "@/src/core/bulk";
 import type { ColumnMapping } from "@/src/core/imports";
+import type { DuplicateReason } from "@/src/core/duplicates";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -163,6 +164,18 @@ export const api = {
   },
   updateTransaction(transactionId: string, body: Record<string, unknown>) {
     return request<{ transaction: Transaction }>(`/api/transactions/${transactionId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  checkDuplicates(
+    workspaceId: string,
+    body: { type: TransactionType; amountMajor: string; currency: string; date: string; accountId: string | null; text: string; upiRef: string | null; exceptId?: string | null },
+  ) {
+    return request<{ matches: Array<{ transaction: Transaction; reason: DuplicateReason }> }>(`/api/workspaces/${workspaceId}/duplicates/check`, { method: "POST", body: JSON.stringify(body) });
+  },
+  listDuplicates(workspaceId: string) {
+    return request<{ pairs: Array<{ first: Transaction; second: Transaction; reason: DuplicateReason }> }>(`/api/workspaces/${workspaceId}/duplicates`);
+  },
+  markNotDuplicate(transactionId: string, otherId: string) {
+    return request<{ ok: boolean }>(`/api/transactions/${transactionId}/not-duplicate`, { method: "POST", body: JSON.stringify({ otherId }) });
   },
   deleteTransaction(transactionId: string) {
     return request<{ ok: boolean }>(`/api/transactions/${transactionId}`, {

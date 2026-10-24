@@ -20,7 +20,7 @@ type Props = {
 const RANK = { over: 0, near: 1, ok: 2 } as const;
 
 /** Keeps the latest value once it has stopped changing for a moment, so typing doesn't ask the server on every key. */
-function useSettled<T>(value: T, delayMs = 350) {
+export function useSettled<T>(value: T, delayMs = 350) {
   const [settled, setSettled] = useState(value);
   useEffect(() => {
     const timer = setTimeout(() => setSettled(value), delayMs);
