@@ -24,6 +24,7 @@ export { Scenario, type ScenarioDocument } from "./Scenario";
 export { TransactionView, type TransactionViewDocument } from "./TransactionView";
 export { InstallmentPlan, type InstallmentPlanDocument } from "./InstallmentPlan";
 export { ImportBatch, type ImportBatchDocument } from "./ImportBatch";
+export { ReceiptInbox, type ReceiptInboxDocument } from "./ReceiptInbox";
 export {
   TransactionChange,
   TransactionComment,

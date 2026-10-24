@@ -31,6 +31,7 @@ import type {
   MemberView,
   SavingsGoal,
   Transaction,
+  InboxReceipt,
   TransactionType,
   Workspace,
   WorkspaceWithRole,
@@ -396,6 +397,26 @@ export const api = {
     return request<{ summary: DashboardSummary }>(
       `/api/workspaces/${workspaceId}/dashboard?range=${range}`,
     );
+  },
+  listReceiptInbox(workspaceId: string) {
+    return request<{ receipts: InboxReceipt[] }>(`/api/workspaces/${workspaceId}/receipt-inbox`);
+  },
+  uploadReceiptsToInbox(workspaceId: string, files: File[]) {
+    const form = new FormData();
+    for (const file of files) form.append("files", file);
+    return request<{ uploaded: number }>(`/api/workspaces/${workspaceId}/receipt-inbox`, { method: "POST", body: form });
+  },
+  updateInboxReceipt(receiptId: string, body: { date?: string | null; amountMajor?: string | null; currency?: string | null; merchant?: string | null }) {
+    return request<{ ok: boolean }>(`/api/receipt-inbox/${receiptId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteInboxReceipt(receiptId: string) {
+    return request<{ ok: boolean }>(`/api/receipt-inbox/${receiptId}`, { method: "DELETE" });
+  },
+  matchReceipt(receiptId: string, transactionId: string) {
+    return request<{ ok: boolean }>(`/api/receipt-inbox/${receiptId}/match`, { method: "POST", body: JSON.stringify({ transactionId }) });
+  },
+  matchAllReceipts(workspaceId: string) {
+    return request<{ matched: number }>(`/api/workspaces/${workspaceId}/receipt-inbox/match-all`, { method: "POST" });
   },
   uploadReceipt(workspaceId: string, file: File) {
     const form = new FormData();

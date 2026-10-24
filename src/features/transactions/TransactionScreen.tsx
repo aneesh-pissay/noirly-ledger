@@ -146,6 +146,7 @@ export function TransactionScreen({
         </div>
         <div className="flex gap-2">
           {!recurringOnly ? <Link href={`${base}/import`} className="inline-flex items-center px-3 text-sm underline">Import statement</Link> : null}
+          {!recurringOnly ? <Link href={`${base}/receipts`} className="inline-flex items-center px-3 text-sm underline">Match receipts</Link> : null}
           {!recurringOnly ? <Button variant="ghost" onClick={() => setBulkAdding(true)}>Add several</Button> : null}
           <Button onClick={() => setOpen(true)}>Add</Button>
         </div>

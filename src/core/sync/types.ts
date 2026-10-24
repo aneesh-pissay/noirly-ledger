@@ -432,6 +432,24 @@ export type ImportBatchSummary = {
   createdAt: string;
 };
 
+/** A receipt in the inbox: what it's for, and the transactions it could belong to until it's matched. */
+export type InboxReceipt = {
+  id: string;
+  name: string;
+  url: string;
+  contentType: string;
+  size: number;
+  date: string | null;
+  amountMinor: number | null;
+  currency: string | null;
+  merchant: string | null;
+  transactionId: string | null;
+  matchedAt: string | null;
+  createdAt: string;
+  /** Best first; empty once matched. */
+  suggestions: Transaction[];
+};
+
 export type InstallmentPlanSummary = {
   id: string;
   name: string;

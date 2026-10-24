@@ -246,6 +246,15 @@ export const duplicateCheckBodySchema = z.object({
   exceptId: z.string().min(1).max(64).nullable().optional(),
 });
 
+export const inboxReceiptPatchSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  amountMajor: amountMajorSchema.nullable().optional(),
+  currency: currencyCode.nullable().optional(),
+  merchant: z.string().max(80).nullable().optional(),
+});
+
+export const matchReceiptBodySchema = z.object({ transactionId: z.string().min(1).max(64) });
+
 export const notDuplicateBodySchema = z.object({ otherId: z.string().min(1).max(64) });
 
 export const budgetCheckBodySchema = z.object({
