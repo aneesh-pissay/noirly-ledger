@@ -18,7 +18,7 @@ const MAX_OCCURRENCES = 400;
  * deleted, as the engine counts them) through `through`. Ones already due
  * but not yet posted count as upcoming: they aren't in any balance yet.
  */
-async function upcomingRecurring(workspaceId: Types.ObjectId, through: string): Promise<UpcomingItem[]> {
+export async function upcomingRecurring(workspaceId: Types.ObjectId, through: string): Promise<UpcomingItem[]> {
   const templates = await TransactionModel.find({
     workspaceId,
     isRecurring: true,
@@ -58,6 +58,10 @@ async function upcomingRecurring(workspaceId: Types.ObjectId, through: string): 
       toAmountMinor: template.toAmountMinor ?? null,
       categoryId: template.categoryId ? String(template.categoryId) : null,
       recurring: true,
+      ruleId: String(template._id),
+      merchant: template.merchant ?? null,
+      note: template.note ?? null,
+      frequency: rule.frequency,
     }));
   });
 }

@@ -42,6 +42,7 @@ import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { BulkChange } from "@/src/core/bulk";
 import type { ColumnMapping } from "@/src/core/imports";
 import type { DuplicateReason } from "@/src/core/duplicates";
+import type { BillItem } from "@/src/core/bills";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -396,6 +397,11 @@ export const api = {
   dashboard(workspaceId: string, range: DateRangePreset) {
     return request<{ summary: DashboardSummary }>(
       `/api/workspaces/${workspaceId}/dashboard?range=${range}`,
+    );
+  },
+  getBillCalendar(workspaceId: string, month: string) {
+    return request<{ month: string; today: string; items: BillItem[]; totals: Array<{ currency: string; paidMinor: number; toPayMinor: number }> }>(
+      `/api/workspaces/${workspaceId}/bills?month=${month}`,
     );
   },
   listReceiptInbox(workspaceId: string) {

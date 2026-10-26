@@ -156,6 +156,7 @@ export function TransactionComposer({ workspaceId, baseCurrency }: Props) {
         queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: ["labels", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: ["duplicates", workspaceId] }),
+        queryClient.invalidateQueries({ queryKey: ["bills", workspaceId] }),
       ]);
       form.reset({
         type: "expense",

@@ -679,6 +679,11 @@ export type UpcomingItem = {
   toAmountMinor: MoneyMinor | null;
   categoryId: string | null;
   recurring: boolean;
+  /** Recurring ones: the rule, its merchant and note, and how often it repeats. */
+  ruleId?: string;
+  merchant?: string | null;
+  note?: string | null;
+  frequency?: string;
 };
 
 /** Where open accounts are heading over a window, and what's free to spend by its end. */

@@ -16,6 +16,7 @@ import { CLEARING_LABEL } from "@/src/core/clearing";
 import { filtersFromParams, filtersToQuery } from "@/src/core/search";
 import { BulkBar } from "@/src/features/transactions/BulkBar";
 import { BulkCreateDialog } from "@/src/features/transactions/BulkCreateDialog";
+import { BillCalendar } from "@/src/features/bills/BillCalendar";
 import { EmiPanel } from "@/src/features/installments/EmiPanel";
 import { TransactionDetails } from "@/src/features/transactions/TransactionDetails";
 import { DuplicatesPanel } from "@/src/features/transactions/DuplicatesPanel";
@@ -111,6 +112,7 @@ export function TransactionScreen({
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ["duplicates", workspaceId] }),
+        queryClient.invalidateQueries({ queryKey: ["bills", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) }),
       ]),
@@ -180,7 +182,8 @@ export function TransactionScreen({
         projectName={projectName}
       />
       {recurringOnly ? (
-        <div className="mt-6">
+        <div className="mt-6 space-y-6">
+          <BillCalendar workspaceId={workspaceId} />
           <EmiPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
         </div>
       ) : null}

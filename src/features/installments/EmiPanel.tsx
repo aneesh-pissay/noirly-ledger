@@ -56,6 +56,7 @@ export function EmiPanel({ workspaceId, baseCurrency }: Props) {
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["transactions", workspaceId] });
+    void queryClient.invalidateQueries({ queryKey: ["bills", workspaceId] });
     void queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) });
     void queryClient.invalidateQueries({ queryKey: ["dashboard", workspaceId] });
   };
