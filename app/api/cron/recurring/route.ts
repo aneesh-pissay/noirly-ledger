@@ -1,6 +1,7 @@
 import { jsonError, jsonOk, ApiError } from "@/src/server/api/http";
 import { runRecurringEngine } from "@/src/server/recurring/run";
 import { runBillReminders } from "@/src/server/reminders";
+import { runPriceAlerts } from "@/src/server/subscription-insights";
 import { bearerMatches } from "@/src/server/security/bearer";
 
 export const runtime = "nodejs";
@@ -17,7 +18,8 @@ export async function POST(request: Request) {
     // Post what's due first, so reminders don't go out for charges just recorded.
     const result = await runRecurringEngine();
     const reminders = await runBillReminders();
-    return jsonOk({ ...result, ...reminders });
+    const prices = await runPriceAlerts();
+    return jsonOk({ ...result, ...reminders, ...prices });
   } catch (error) {
     return jsonError(error);
   }

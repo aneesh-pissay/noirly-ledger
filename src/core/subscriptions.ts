@@ -32,6 +32,8 @@ export type SpottedSubscription = {
   /** Charged recently enough that it looks still running. */
   active: boolean;
   transactionIds: string[];
+  /** Its charges, oldest first. */
+  charges: Array<{ date: string; amountMinor: number }>;
 };
 
 /** Days between charges each rhythm allows (a month is 28 to 31 days, give or take a late charge). */
@@ -125,7 +127,8 @@ export function spotSubscriptions(records: SpendRecord[], today: string): Spotte
       typicalMinor,
       lastMinor: last.amountMinor,
       previousMinor: dated.at(-2)!.amountMinor,
-      monthlyMinor: Math.round(typicalMinor * rhythm.perMonth),
+      // Costed at the latest price: what it charges from now on.
+      monthlyMinor: Math.round(last.amountMinor * rhythm.perMonth),
       count: dated.length,
       firstDate: dated[0]!.date,
       lastDate: last.date,
@@ -133,6 +136,7 @@ export function spotSubscriptions(records: SpendRecord[], today: string): Spotte
       // Missing more than half a rhythm past its next charge looks cancelled.
       active: days(last.date, today) <= rhythm.max + rhythm.step / 2,
       transactionIds: dated.map((r) => r.id),
+      charges: dated.map((r) => ({ date: r.date, amountMinor: r.amountMinor })),
     });
   }
   return found.sort((a, b) => b.monthlyMinor - a.monthlyMinor);

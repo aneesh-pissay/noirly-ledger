@@ -19,7 +19,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | 1. Accounts and the money model | 10 / 10 |
 | 2. Budgeting | 9 / 9 |
 | 3. Transactions and imports | 10 / 11 |
-| 4. Bills, subscriptions, savings and debt | 5 / 13 |
+| 4. Bills, subscriptions, savings and debt | 6 / 13 |
 | 5. Team expense management | 0 / 10 |
 | 6. Reports and analytics | 0 / 9 |
 | 7. Automations and integrations | 0 / 8 |
@@ -100,7 +100,7 @@ _Needs Phase 1 accounts._
 - [x] Scheduled payment records with due, paid and overdue statuses (M) — done 2026-10-26
 - [x] Optional UPI payment deeplinks (upi://pay) to supported apps (S) — done 2026-10-26
 - [x] Subscription detection from transactions (M) — done 2026-10-26
-- [ ] Price-increase alerts and duplicate or unused subscription insights (M)
+- [x] Price-increase alerts and duplicate or unused subscription insights (M) — done 2026-10-26
 - [ ] Bill-based cash-flow projection (M)
 - [ ] Sinking funds for upcoming expenses (M)
 - [ ] Goal milestones and forecasts (when you'll reach it at this pace) (S)

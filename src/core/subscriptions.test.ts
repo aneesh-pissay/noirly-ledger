@@ -28,7 +28,7 @@ describe("spotting subscriptions", () => {
     expect(found).toHaveLength(1);
     expect(found[0]).toMatchObject({
       key: "m:netflix", name: "Netflix", cadence: "monthly", count: 4, typicalMinor: 64_900, lastMinor: 79_900, previousMinor: 64_900,
-      monthlyMinor: 64_900, firstDate: "2026-07-05", lastDate: "2026-10-05", nextDate: "2026-11-05", active: true,
+      monthlyMinor: 79_900, firstDate: "2026-07-05", lastDate: "2026-10-05", nextDate: "2026-11-05", active: true,
     });
   });
 

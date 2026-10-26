@@ -29,7 +29,7 @@ const RULES: Record<Cadence, RecurrenceRule> = {
  * paid by hand already accounts for), leaving out what's already a
  * recurring rule and what someone said isn't a subscription.
  */
-async function spot(workspaceId: Types.ObjectId, today: string) {
+export async function spot(workspaceId: Types.ObjectId, today: string) {
   const since = new Date(Date.parse(`${today}T00:00:00Z`) - LOOKBACK_DAYS * 86_400_000);
   const [docs, rules, dismissed, paying] = await Promise.all([
     TransactionModel.find({

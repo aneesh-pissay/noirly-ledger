@@ -148,6 +148,8 @@ const transactionSchema = new Schema(
     recurrence: { type: recurrenceSchema, default: null },
     // Recurring rules only; null keeps the default notice (see src/core/reminders.ts).
     reminders: { type: reminderSettingsSchema, default: null },
+    // Recurring rules only: when someone last said they still use it (see src/core/subscription-insights.ts).
+    reviewedOn: { type: String, default: null },
     recurringParentId: {
       type: Schema.Types.ObjectId,
       ref: "Transaction",

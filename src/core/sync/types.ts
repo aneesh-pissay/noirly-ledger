@@ -230,7 +230,8 @@ export type NotificationKind =
   | "approval.decided"
   | "goal.reached"
   | "recurring.due"
-  | "bill.reminder";
+  | "bill.reminder"
+  | "subscription.price";
 
 export type InAppNotification = {
   id: string;

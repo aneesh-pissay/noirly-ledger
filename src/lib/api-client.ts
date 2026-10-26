@@ -46,6 +46,7 @@ import type { BillItem, BillMarker } from "@/src/core/bills";
 import type { ReminderSettings } from "@/src/core/reminders";
 import type { PaymentRepeat, PaymentView } from "@/src/core/payments";
 import type { SpottedSubscription } from "@/src/core/subscriptions";
+import type { SubscriptionInsight } from "@/src/core/subscription-insights";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -415,6 +416,15 @@ export const api = {
   },
   dismissSubscription(workspaceId: string, key: string) {
     return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/subscriptions/dismiss`, { method: "POST", body: JSON.stringify({ key }) });
+  },
+  listSubscriptionInsights(workspaceId: string) {
+    return request<{ insights: SubscriptionInsight[] }>(`/api/workspaces/${workspaceId}/subscription-insights`);
+  },
+  dismissInsight(workspaceId: string, id: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/subscription-insights/dismiss`, { method: "POST", body: JSON.stringify({ id }) });
+  },
+  markStillUsed(ruleId: string) {
+    return request<{ reviewedOn: string }>(`/api/transactions/${ruleId}/still-used`, { method: "POST" });
   },
   listPayments(workspaceId: string) {
     return request<{ payments: PaymentView[] }>(`/api/workspaces/${workspaceId}/payments`);

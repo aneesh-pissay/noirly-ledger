@@ -16,7 +16,7 @@ export function SpottedSubscriptions({ workspaceId }: Props) {
   const { money } = useMoneyFormat();
   const spotted = useQuery({ queryKey: ["subscriptions", workspaceId], queryFn: () => api.listSpottedSubscriptions(workspaceId) });
   const refresh = () =>
-    Promise.all([["subscriptions", workspaceId], ["bills", workspaceId], ["transactions", workspaceId]].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+    Promise.all([["subscriptions", workspaceId], ["subscription-insights", workspaceId], ["bills", workspaceId], ["transactions", workspaceId]].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
   const track = useMutation({ mutationFn: (key: string) => api.trackSubscription(workspaceId, key), onSuccess: refresh });
   const dismiss = useMutation({ mutationFn: (key: string) => api.dismissSubscription(workspaceId, key), onSuccess: refresh });
 
