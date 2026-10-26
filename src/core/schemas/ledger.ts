@@ -274,6 +274,8 @@ export const paymentBodySchema = z.object({
   accountId: z.string().min(1).max(64).nullable().optional(),
   categoryId: z.string().min(1).max(64).nullable().optional(),
   note: z.string().max(500).nullable().optional(),
+  upiId: z.string().max(100).nullable().optional(),
+  payeeName: z.string().max(80).nullable().optional(),
   repeat: z.enum(PAYMENT_REPEATS).optional(),
 });
 
@@ -285,11 +287,19 @@ export const paymentPatchSchema = z.object({
   accountId: z.string().min(1).max(64).nullable().optional(),
   categoryId: z.string().min(1).max(64).nullable().optional(),
   note: z.string().max(500).nullable().optional(),
+  upiId: z.string().max(100).nullable().optional(),
+  payeeName: z.string().max(80).nullable().optional(),
   repeat: z.enum(PAYMENT_REPEATS).optional(),
 });
 
 export const payBodySchema = z.discriminatedUnion("how", [
-  z.object({ how: z.literal("record"), paidOn: isoDay, amountMajor: amountMajorSchema.nullable().optional(), accountId: z.string().min(1).max(64).nullable().optional() }),
+  z.object({
+    how: z.literal("record"),
+    paidOn: isoDay,
+    amountMajor: amountMajorSchema.nullable().optional(),
+    accountId: z.string().min(1).max(64).nullable().optional(),
+    upiRef: z.string().max(40).nullable().optional(),
+  }),
   z.object({ how: z.literal("link"), transactionId: z.string().min(1).max(64) }),
   z.object({ how: z.literal("mark"), paidOn: isoDay }),
 ]);

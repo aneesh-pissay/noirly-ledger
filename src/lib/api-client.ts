@@ -409,10 +409,16 @@ export const api = {
   listPayments(workspaceId: string) {
     return request<{ payments: PaymentView[] }>(`/api/workspaces/${workspaceId}/payments`);
   },
-  createPayment(workspaceId: string, body: { name: string; amountMajor: string; currency: string; dueDate: string; accountId?: string | null; categoryId?: string | null; note?: string | null; repeat?: PaymentRepeat }) {
+  createPayment(
+    workspaceId: string,
+    body: { name: string; amountMajor: string; currency: string; dueDate: string; accountId?: string | null; categoryId?: string | null; note?: string | null; upiId?: string | null; payeeName?: string | null; repeat?: PaymentRepeat },
+  ) {
     return request<{ payment: PaymentView }>(`/api/workspaces/${workspaceId}/payments`, { method: "POST", body: JSON.stringify(body) });
   },
-  updatePayment(paymentId: string, body: Partial<{ name: string; amountMajor: string; currency: string; dueDate: string; accountId: string | null; categoryId: string | null; note: string | null; repeat: PaymentRepeat }>) {
+  updatePayment(
+    paymentId: string,
+    body: Partial<{ name: string; amountMajor: string; currency: string; dueDate: string; accountId: string | null; categoryId: string | null; note: string | null; upiId: string | null; payeeName: string | null; repeat: PaymentRepeat }>,
+  ) {
     return request<{ payment: PaymentView }>(`/api/payments/${paymentId}`, { method: "PATCH", body: JSON.stringify(body) });
   },
   deletePayment(paymentId: string) {
@@ -420,7 +426,10 @@ export const api = {
   },
   payPayment(
     paymentId: string,
-    body: { how: "record"; paidOn: string; amountMajor?: string | null; accountId?: string | null } | { how: "link"; transactionId: string } | { how: "mark"; paidOn: string },
+    body:
+      | { how: "record"; paidOn: string; amountMajor?: string | null; accountId?: string | null; upiRef?: string | null }
+      | { how: "link"; transactionId: string }
+      | { how: "mark"; paidOn: string },
   ) {
     return request<{ payment: PaymentView; next: PaymentView | null }>(`/api/payments/${paymentId}/pay`, { method: "POST", body: JSON.stringify(body) });
   },

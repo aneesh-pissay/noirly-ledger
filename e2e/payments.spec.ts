@@ -88,4 +88,43 @@ test.describe("scheduled payments", () => {
     await page.screenshot({ path: "test-results/payments-panel.png", fullPage: true });
     await context.close();
   });
+
+  test("pay a rupee bill through a UPI app link, then record its reference", async ({ browser }) => {
+    const ws = await personalWorkspaceId(owner);
+    expect((await owner.api.post(`/api/workspaces/${ws}/fx-rates`, { data: { currency: "INR", rate: "0.012", effectiveFrom: "2020-01-01" } })).ok()).toBe(true);
+    expect((await owner.api.post(`/api/workspaces/${ws}/payments`, { data: { name: "Bad", amountMajor: "10", currency: "INR", dueDate: day(1), upiId: "not an id" } })).status()).toBe(400);
+
+    const context = await browserAs(browser, owner);
+    const page = await context.newPage();
+    await page.goto("/recurring");
+    await page.getByRole("button", { name: "New bill" }).click();
+    const form = page.getByRole("form", { name: "New bill" });
+    await form.getByLabel("Bill").fill("Electricity");
+    await form.getByLabel("Amount").fill("1840.50");
+    await form.getByLabel("Due on").fill(day(3));
+    // UPI pays in rupees: the payee fields come with an INR bill.
+    await expect(form.getByLabel("Payee UPI ID (optional)")).toHaveCount(0);
+    await form.getByLabel("Currency").selectOption("INR");
+    await form.getByLabel("Payee UPI ID (optional)").fill("BESCOM@okaxis");
+    await form.getByLabel("Payee name (optional)").fill("BESCOM");
+    await form.getByRole("button", { name: "Add bill" }).click();
+    const row = page.locator('[data-payment="Electricity"]');
+    await expect(row.getByRole("link", { name: "Pay Electricity with Any UPI app" })).toHaveAttribute(
+      "href",
+      "upi://pay?pa=bescom@okaxis&pn=BESCOM&am=1840.50&cu=INR&tn=Electricity",
+    );
+    await expect(row.getByRole("link", { name: "Pay Electricity with Google Pay" })).toHaveAttribute("href", /^tez:\/\/upi\/pay\?pa=bescom@okaxis&/);
+    await page.screenshot({ path: "test-results/payments-upi.png" });
+
+    // Back from the app: record it with the reference it showed.
+    await row.getByRole("button", { name: "Mark paid" }).click();
+    const dialog = page.getByRole("dialog", { name: "Pay Electricity" });
+    await dialog.getByLabel("UPI reference (optional)").fill("4285 1234 5678");
+    await dialog.getByRole("button", { name: "Record payment" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('[data-payment="Electricity"][data-payment-status="paid"]')).toBeVisible();
+    const txns = ((await (await owner.api.get(`/api/workspaces/${ws}/transactions`)).json()) as { items: Array<{ merchant: string | null; upiRef: string | null; upiId: string | null }> }).items;
+    expect(txns.find((t) => t.merchant === "Electricity")).toMatchObject({ upiRef: "428512345678", upiId: "bescom@okaxis" });
+    await context.close();
+  });
 });

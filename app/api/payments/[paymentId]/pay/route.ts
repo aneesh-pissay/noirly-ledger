@@ -15,7 +15,13 @@ export async function POST(
     const { ctx, sync } = await getLedgerProvider();
     const input =
       body.how === "record"
-        ? { how: "record" as const, paidOn: body.paidOn, accountId: body.accountId, amountMinor: body.amountMajor ? Math.abs(parseMajorToMinor(body.amountMajor)) : null }
+        ? {
+            how: "record" as const,
+            paidOn: body.paidOn,
+            accountId: body.accountId,
+            amountMinor: body.amountMajor ? Math.abs(parseMajorToMinor(body.amountMajor)) : null,
+            upiRef: body.upiRef || null,
+          }
         : body;
     return jsonOk(await payPayment(sync, ctx.userId, paymentId, input));
   } catch (error) {

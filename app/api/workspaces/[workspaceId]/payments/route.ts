@@ -35,6 +35,8 @@ export async function POST(
       accountId: body.accountId ?? null,
       categoryId: body.categoryId ?? null,
       note: body.note ?? null,
+      upiId: body.upiId ?? null,
+      payeeName: body.payeeName ?? null,
       repeat: body.repeat ?? "none",
     });
     return jsonOk({ payment }, 201);

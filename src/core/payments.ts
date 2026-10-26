@@ -23,6 +23,9 @@ export type PaymentView = {
   accountId: string | null;
   categoryId: string | null;
   note: string | null;
+  /** Who it's paid to over UPI, if known; a rupee bill with one gets a payment link. */
+  upiId: string | null;
+  payeeName: string | null;
   repeat: PaymentRepeat;
   status: PaymentStatus;
   paidOn: string | null;

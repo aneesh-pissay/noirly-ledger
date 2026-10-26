@@ -9,6 +9,7 @@ import { categoryTree } from "@/src/core/categories";
 import { COMMON_CURRENCIES, formatMinorToMajor } from "@/src/core/money";
 import { isoDate } from "@/src/core/budgets/period";
 import { daysOverdue, PAYMENT_REPEATS, type PaymentRepeat, type PaymentView } from "@/src/core/payments";
+import { UPI_APPS, upiPayLink, type UpiApp } from "@/src/core/upi";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { Select } from "@/src/components/Select";
 
@@ -38,7 +39,9 @@ export function PaymentsPanel({ workspaceId, baseCurrency }: Props) {
   const openAccounts = (accounts.data?.accounts ?? []).filter((a) => !a.archived);
   const [adding, setAdding] = useState(false);
   const [paying, setPaying] = useState<PaymentView | null>(null);
-  const [form, setForm] = useState({ name: "", amount: "", currency: baseCurrency, dueDate: today, repeat: "monthly" as PaymentRepeat, accountId: "", categoryId: "" });
+  const [form, setForm] = useState({ name: "", amount: "", currency: baseCurrency, dueDate: today, repeat: "monthly" as PaymentRepeat, accountId: "", categoryId: "", upiId: "", payeeName: "" });
+  // UPI pays in rupees, so the payee's UPI ID is asked for on rupee bills only.
+  const formCurrency = openAccounts.find((a) => a.id === form.accountId)?.currency ?? form.currency;
   const refresh = () =>
     Promise.all(
       [["payments", workspaceId], ["bills", workspaceId], ["transactions", workspaceId], qk.accounts(workspaceId)].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
@@ -54,10 +57,12 @@ export function PaymentsPanel({ workspaceId, baseCurrency }: Props) {
         repeat: form.repeat,
         accountId: form.accountId || null,
         categoryId: form.categoryId || null,
+        upiId: formCurrency === "INR" ? form.upiId.trim() || null : null,
+        payeeName: formCurrency === "INR" ? form.payeeName.trim() || null : null,
       }),
     onSuccess: async () => {
       setAdding(false);
-      setForm((f) => ({ ...f, name: "", amount: "" }));
+      setForm((f) => ({ ...f, name: "", amount: "", upiId: "", payeeName: "" }));
       await refresh();
     },
   });
@@ -130,6 +135,18 @@ export function PaymentsPanel({ workspaceId, baseCurrency }: Props) {
                 </Select>
               </div>
             )}
+            {formCurrency === "INR" ? (
+              <>
+                <div>
+                  <Label htmlFor="pay-upi">Payee UPI ID (optional)</Label>
+                  <Input id="pay-upi" autoComplete="off" placeholder="name@bank" maxLength={100} value={form.upiId} onChange={(e) => setForm({ ...form, upiId: e.target.value })} />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label htmlFor="pay-payee">Payee name (optional)</Label>
+                  <Input id="pay-payee" maxLength={80} value={form.payeeName} onChange={(e) => setForm({ ...form, payeeName: e.target.value })} />
+                </div>
+              </>
+            ) : null}
             {create.error ? <p role="alert" className="text-sm text-[var(--balance-negative)] sm:col-span-3">{create.error.message}</p> : null}
             <div className="sm:col-span-3">
               <Button type="submit" disabled={create.isPending}>{create.isPending ? "Adding…" : "Add bill"}</Button>
@@ -146,12 +163,13 @@ export function PaymentsPanel({ workspaceId, baseCurrency }: Props) {
                   <span className={`block text-xs ${p.status === "overdue" ? "text-[var(--balance-negative)]" : "text-[var(--muted-foreground)]"}`}>
                     {when(p, today)}{p.repeat !== "none" ? ` · ${REPEAT_LABEL[p.repeat].toLowerCase()}` : ""}
                   </span>
+                  {p.status !== "paid" && p.upiId && p.currency === "INR" ? <UpiLinks payment={p} /> : null}
                 </span>
                 <span className="font-mono tabular-nums">{money(p.paidAmountMinor ?? p.amountMinor, p.currency)}</span>
                 {p.status === "paid" ? (
                   <button type="button" className="text-xs underline" disabled={undo.isPending} onClick={() => undo.mutate(p.id)}>Undo</button>
                 ) : (
-                  <span className="flex gap-3">
+                  <span className="flex items-center gap-3">
                     <Button onClick={() => setPaying(p)}>Mark paid</Button>
                     <button type="button" className="text-xs underline" disabled={remove.isPending} onClick={() => { if (window.confirm(`Delete ${p.name}?`)) remove.mutate(p.id); }}>Delete</button>
                   </span>
@@ -164,6 +182,22 @@ export function PaymentsPanel({ workspaceId, baseCurrency }: Props) {
       </div>
       <PayDialog payment={paying} today={today} accounts={openAccounts} onClose={() => setPaying(null)} onPaid={refresh} />
     </Card>
+  );
+}
+
+/** Links that open a UPI app ready to pay the bill; they work on a phone with the app installed. */
+function UpiLinks({ payment }: { payment: PaymentView }) {
+  const link = (app: UpiApp) => upiPayLink({ upiId: payment.upiId!, payeeName: payment.payeeName ?? payment.name, amountMinor: payment.amountMinor, note: payment.name }, app);
+  return (
+    <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-[var(--muted-foreground)]" title="Opens on a phone with the app installed">
+      <span>Pay {payment.upiId} with</span>
+      {(Object.keys(UPI_APPS) as UpiApp[]).map((app) => (
+        <a key={app} href={link(app)} className="text-[var(--foreground)] underline" aria-label={`Pay ${payment.name} with ${UPI_APPS[app].label}`}>
+          {UPI_APPS[app].label}
+        </a>
+      ))}
+      <button type="button" className="underline" onClick={() => void navigator.clipboard?.writeText(link("any"))}>Copy link</button>
+    </span>
   );
 }
 
@@ -192,6 +226,7 @@ function PayForm({ payment, today, accounts, onClose, onPaid }: { payment: Payme
   const [paidOn, setPaidOn] = useState(today);
   const [amount, setAmount] = useState(formatMinorToMajor(payment.amountMinor));
   const [accountId, setAccountId] = useState(payment.accountId ?? "");
+  const [upiRef, setUpiRef] = useState("");
   const matches = useQuery({ queryKey: ["payment-matches", payment.id], queryFn: () => api.paymentMatches(payment.id) });
   const pay = useMutation({
     mutationFn: (body: Parameters<typeof api.payPayment>[1]) => api.payPayment(payment.id, body),
@@ -208,7 +243,7 @@ function PayForm({ payment, today, accounts, onClose, onPaid }: { payment: Payme
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault();
-          pay.mutate({ how: "record", paidOn, amountMajor: amount, accountId: accountId || null });
+          pay.mutate({ how: "record", paidOn, amountMajor: amount, accountId: accountId || null, upiRef: upiRef.trim() || null });
         }}
       >
         <p className="text-sm font-medium">Record the payment</p>
@@ -229,6 +264,12 @@ function PayForm({ payment, today, accounts, onClose, onPaid }: { payment: Payme
             {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>)}
           </Select>
         </div>
+        {payment.upiId ? (
+          <div>
+            <Label htmlFor="paid-upi-ref">UPI reference (optional)</Label>
+            <Input id="paid-upi-ref" inputMode="numeric" className="font-mono" placeholder="12 digits from the app" maxLength={20} value={upiRef} onChange={(e) => setUpiRef(e.target.value)} />
+          </div>
+        ) : null}
         <Button type="submit" disabled={pay.isPending}>Record payment</Button>
       </form>
 

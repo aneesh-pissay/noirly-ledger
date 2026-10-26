@@ -8,6 +8,7 @@ import { mapTransaction } from "@/src/server/mappers";
 import { requireAction, requireMembershipRole } from "@/src/server/workspace/members";
 import { nextDueDate, paymentStatus, type PaymentRepeat, type PaymentView } from "@/src/core/payments";
 import { rankMatches, RECEIPT_WINDOW_DAYS } from "@/src/core/receipts";
+import { normalizeUpiId } from "@/src/core/upi";
 import type { LedgerSyncProvider, Transaction } from "@/src/core/sync/types";
 
 function oid(id: string) {
@@ -26,8 +27,19 @@ export type PaymentInput = {
   accountId: string | null;
   categoryId: string | null;
   note: string | null;
+  upiId?: string | null;
+  payeeName?: string | null;
   repeat: PaymentRepeat;
 };
+
+/** A UPI ID as stored, or a 400 saying what's wrong with it. */
+function upiIdOf(text: string | null | undefined) {
+  try {
+    return normalizeUpiId(text);
+  } catch (error) {
+    throw new ApiError(400, "invalid_request", error instanceof Error ? error.message : "Invalid UPI ID");
+  }
+}
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -43,6 +55,8 @@ export function toView(doc: ScheduledPaymentDocument, asOf = today()): PaymentVi
     accountId: doc.accountId ? String(doc.accountId) : null,
     categoryId: doc.categoryId ? String(doc.categoryId) : null,
     note: doc.note ?? null,
+    upiId: doc.upiId ?? null,
+    payeeName: doc.payeeName ?? null,
     repeat: (doc.repeat ?? "none") as PaymentRepeat,
     status: paymentStatus(doc.dueDate, asOf, Boolean(doc.paidOn)),
     paidOn: doc.paidOn ?? null,
@@ -81,6 +95,8 @@ export function createPayment(userId: string, workspaceId: string, input: Paymen
       workspaceId: ws,
       ...input,
       name: input.name.trim(),
+      upiId: upiIdOf(input.upiId),
+      payeeName: input.payeeName?.trim() || null,
       currency: await currencyFor(ws, input.accountId, input.currency),
       accountId: input.accountId ? oid(input.accountId) : null,
       categoryId: input.categoryId ? oid(input.categoryId) : null,
@@ -113,6 +129,8 @@ export function updatePayment(userId: string, paymentId: string, patch: Partial<
     if (patch.accountId !== undefined || patch.currency !== undefined) doc.currency = await currencyFor(doc.workspaceId, doc.accountId ? String(doc.accountId) : null, patch.currency ?? doc.currency);
     if (patch.categoryId !== undefined) doc.categoryId = patch.categoryId ? oid(patch.categoryId) : null;
     if (patch.note !== undefined) doc.note = patch.note;
+    if (patch.upiId !== undefined) doc.upiId = upiIdOf(patch.upiId);
+    if (patch.payeeName !== undefined) doc.payeeName = patch.payeeName?.trim() || null;
     if (patch.repeat !== undefined) doc.repeat = patch.repeat;
     await doc.save();
     return toView(doc.toObject() as ScheduledPaymentDocument);
@@ -149,7 +167,7 @@ export function paymentMatches(userId: string, paymentId: string): Promise<{ mat
 }
 
 export type PayInput =
-  | { how: "record"; paidOn: string; amountMinor?: number | null; accountId?: string | null }
+  | { how: "record"; paidOn: string; amountMinor?: number | null; accountId?: string | null; upiRef?: string | null }
   | { how: "link"; transactionId: string }
   | { how: "mark"; paidOn: string };
 
@@ -180,6 +198,8 @@ export async function payPayment(sync: LedgerSyncProvider, userId: string, payme
       merchant: doc.name,
       note: doc.note,
       date: input.paidOn,
+      // Paid over UPI: the reference from the app, and who it went to.
+      ...(input.upiRef ? { upiRef: input.upiRef, upiId: doc.upiId ?? null } : {}),
     });
     paid = { paidOn: input.paidOn, paidAmountMinor: amountMinor, transactionId: oid(txn.id), recordedHere: true };
   } else if (input.how === "link") {
@@ -209,6 +229,8 @@ export async function payPayment(sync: LedgerSyncProvider, userId: string, payme
           accountId: doc.accountId,
           categoryId: doc.categoryId,
           note: doc.note,
+          upiId: doc.upiId,
+          payeeName: doc.payeeName,
           repeat: doc.repeat,
           dayOfMonth: doc.dayOfMonth,
           previousId: doc._id,

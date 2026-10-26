@@ -19,6 +19,9 @@ const scheduledPaymentSchema = new Schema(
     accountId: { type: Schema.Types.ObjectId, ref: "Account", default: null },
     categoryId: { type: Schema.Types.ObjectId, ref: "Category", default: null },
     note: { type: String, default: null },
+    // Who it's paid to over UPI, for a payment link (see upiPayLink in src/core/upi.ts).
+    upiId: { type: String, default: null },
+    payeeName: { type: String, default: null },
     repeat: { type: String, enum: PAYMENT_REPEATS, default: "none" },
     // The day of the month a repeating one falls on, so short months don't move it for good.
     dayOfMonth: { type: Number, default: null },
