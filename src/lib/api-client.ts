@@ -47,6 +47,7 @@ import type { ReminderSettings } from "@/src/core/reminders";
 import type { PaymentRepeat, PaymentView } from "@/src/core/payments";
 import type { SpottedSubscription } from "@/src/core/subscriptions";
 import type { SubscriptionInsight } from "@/src/core/subscription-insights";
+import type { FundRepeat, FundSuggestion, SinkingFundView } from "@/src/core/sinking-funds";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -416,6 +417,27 @@ export const api = {
   },
   dismissSubscription(workspaceId: string, key: string) {
     return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/subscriptions/dismiss`, { method: "POST", body: JSON.stringify({ key }) });
+  },
+  listSinkingFunds(workspaceId: string) {
+    return request<{ funds: SinkingFundView[]; suggestions: FundSuggestion[] }>(`/api/workspaces/${workspaceId}/sinking-funds`);
+  },
+  createSinkingFund(
+    workspaceId: string,
+    body: { name: string; targetMajor: string; currency: string; dueDate: string; repeat?: FundRepeat; savedMajor?: string; ruleId?: string | null; paymentId?: string | null },
+  ) {
+    return request<{ fund: SinkingFundView }>(`/api/workspaces/${workspaceId}/sinking-funds`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateSinkingFund(fundId: string, body: Partial<{ name: string; targetMajor: string; dueDate: string; repeat: FundRepeat }>) {
+    return request<{ fund: SinkingFundView }>(`/api/sinking-funds/${fundId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteSinkingFund(fundId: string) {
+    return request<{ ok: boolean }>(`/api/sinking-funds/${fundId}`, { method: "DELETE" });
+  },
+  moveFundMoney(fundId: string, body: { amountMajor: string; direction: "in" | "out" }) {
+    return request<{ fund: SinkingFundView }>(`/api/sinking-funds/${fundId}/move`, { method: "POST", body: JSON.stringify(body) });
+  },
+  spendFund(fundId: string, spentMajor?: string | null) {
+    return request<{ fund: SinkingFundView | null }>(`/api/sinking-funds/${fundId}/spent`, { method: "POST", body: JSON.stringify({ spentMajor: spentMajor ?? null }) });
   },
   listSubscriptionInsights(workspaceId: string) {
     return request<{ insights: SubscriptionInsight[] }>(`/api/workspaces/${workspaceId}/subscription-insights`);

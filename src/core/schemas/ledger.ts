@@ -12,6 +12,7 @@ import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
 import { MAX_BULK, MAX_BULK_CREATE } from "@/src/core/bulk";
 import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
 import { PAYMENT_REPEATS } from "@/src/core/payments";
+import { FUND_REPEATS } from "@/src/core/sinking-funds";
 import { DATE_FORMATS } from "@/src/core/imports";
 
 export const currencyCode = z
@@ -303,6 +304,28 @@ export const payBodySchema = z.discriminatedUnion("how", [
   z.object({ how: z.literal("link"), transactionId: z.string().min(1).max(64) }),
   z.object({ how: z.literal("mark"), paidOn: isoDay }),
 ]);
+
+export const sinkingFundBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  targetMajor: amountMajorSchema,
+  currency: currencyCode,
+  dueDate: isoDay,
+  repeat: z.enum(FUND_REPEATS).optional(),
+  savedMajor: amountMajorSchema.optional(),
+  ruleId: z.string().min(1).max(64).nullable().optional(),
+  paymentId: z.string().min(1).max(64).nullable().optional(),
+});
+
+export const sinkingFundPatchSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  targetMajor: amountMajorSchema.optional(),
+  dueDate: isoDay.optional(),
+  repeat: z.enum(FUND_REPEATS).optional(),
+});
+
+export const fundMoveBodySchema = z.object({ amountMajor: amountMajorSchema, direction: z.enum(["in", "out"]) });
+
+export const fundSpentBodySchema = z.object({ spentMajor: amountMajorSchema.nullable().optional() });
 
 export const insightIdBodySchema = z.object({ id: z.string().min(3).max(300) });
 

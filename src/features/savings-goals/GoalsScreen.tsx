@@ -8,6 +8,7 @@ import { Button, PageContainer } from "@noirly-dev/ui";
 import { Input, Label } from "@noirly-dev/ui";
 import { ProgressBar } from "@/src/components/ProgressBar";
 import { MoneyText } from "@/src/components/MoneyText";
+import { SinkingFunds } from "@/src/features/savings-goals/SinkingFunds";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -134,6 +135,7 @@ export function GoalsScreen({ workspaceId, baseCurrency }: Props) {
           );
         })}
       </ul>
+      <SinkingFunds workspaceId={workspaceId} baseCurrency={baseCurrency} />
     </PageContainer>
   );
 }
