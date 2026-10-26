@@ -42,7 +42,8 @@ import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { BulkChange } from "@/src/core/bulk";
 import type { ColumnMapping } from "@/src/core/imports";
 import type { DuplicateReason } from "@/src/core/duplicates";
-import type { BillItem } from "@/src/core/bills";
+import type { BillItem, BillMarker } from "@/src/core/bills";
+import type { ReminderSettings } from "@/src/core/reminders";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -400,9 +401,12 @@ export const api = {
     );
   },
   getBillCalendar(workspaceId: string, month: string) {
-    return request<{ month: string; today: string; items: BillItem[]; totals: Array<{ currency: string; paidMinor: number; toPayMinor: number }> }>(
+    return request<{ month: string; today: string; items: BillItem[]; markers: BillMarker[]; totals: Array<{ currency: string; paidMinor: number; toPayMinor: number }> }>(
       `/api/workspaces/${workspaceId}/bills?month=${month}`,
     );
+  },
+  setReminders(ruleId: string, settings: ReminderSettings | null) {
+    return request<{ reminders: ReminderSettings | null }>(`/api/transactions/${ruleId}/reminders`, { method: "PUT", body: JSON.stringify(settings) });
   },
   listReceiptInbox(workspaceId: string) {
     return request<{ receipts: InboxReceipt[] }>(`/api/workspaces/${workspaceId}/receipt-inbox`);

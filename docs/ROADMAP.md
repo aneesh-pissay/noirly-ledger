@@ -19,7 +19,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | 1. Accounts and the money model | 10 / 10 |
 | 2. Budgeting | 9 / 9 |
 | 3. Transactions and imports | 10 / 11 |
-| 4. Bills, subscriptions, savings and debt | 1 / 13 |
+| 4. Bills, subscriptions, savings and debt | 2 / 13 |
 | 5. Team expense management | 0 / 10 |
 | 6. Reports and analytics | 0 / 9 |
 | 7. Automations and integrations | 0 / 8 |
@@ -96,7 +96,7 @@ _Needs Phase 1 subcategories and splits._
 _Needs Phase 1 accounts._
 
 - [x] Bill and subscription calendar from recurring items (M) — done 2026-10-26
-- [ ] Due-date reminders, plus renewal, cancellation and trial reminders (M)
+- [x] Due-date reminders, plus renewal, cancellation and trial reminders (M) — done 2026-10-26
 - [ ] Scheduled payment records with due, paid and overdue statuses (M)
 - [ ] Optional UPI payment deeplinks (upi://pay) to supported apps (S)
 - [ ] Subscription detection from transactions (M)

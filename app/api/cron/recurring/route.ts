@@ -1,5 +1,6 @@
 import { jsonError, jsonOk, ApiError } from "@/src/server/api/http";
 import { runRecurringEngine } from "@/src/server/recurring/run";
+import { runBillReminders } from "@/src/server/reminders";
 import { bearerMatches } from "@/src/server/security/bearer";
 
 export const runtime = "nodejs";
@@ -13,8 +14,10 @@ export async function POST(request: Request) {
     if (!bearerMatches(request.headers.get("authorization"), secret)) {
       throw new ApiError(401, "unauthorized", "Invalid cron secret");
     }
+    // Post what's due first, so reminders don't go out for charges just recorded.
     const result = await runRecurringEngine();
-    return jsonOk(result);
+    const reminders = await runBillReminders();
+    return jsonOk({ ...result, ...reminders });
   } catch (error) {
     return jsonError(error);
   }

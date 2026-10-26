@@ -1,3 +1,5 @@
+import type { ReminderSettings } from "@/src/core/reminders";
+
 /**
  * The bill and subscription calendar: a month of money going out on a
  * schedule (recurring expenses, EMI installments and expenses entered ahead
@@ -25,7 +27,12 @@ export type BillItem = {
   /** The recurring rule it comes from, and how often it repeats. */
   ruleId: string | null;
   frequency: string | null;
+  /** Recurring ones: the rule's reminder settings (null for the default notice). */
+  reminders?: ReminderSettings | null;
 };
+
+/** A day in the month to act on rather than pay: a free trial ending, or a date to cancel by. */
+export type BillMarker = { date: string; kind: "trial" | "cancel"; ruleId: string; name: string | null };
 
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 

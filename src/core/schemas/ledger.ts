@@ -255,6 +255,16 @@ export const inboxReceiptPatchSchema = z.object({
 
 export const matchReceiptBodySchema = z.object({ transactionId: z.string().min(1).max(64) });
 
+const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const reminderSettingsSchema = z
+  .object({
+    daysBefore: z.number().int().min(0).max(30).nullable(),
+    trialEndsOn: isoDay.nullable(),
+    cancelBy: isoDay.nullable(),
+  })
+  .nullable();
+
 export const notDuplicateBodySchema = z.object({ otherId: z.string().min(1).max(64) });
 
 export const budgetCheckBodySchema = z.object({

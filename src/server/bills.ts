@@ -5,7 +5,8 @@ import { Transaction as TransactionModel } from "@/src/server/models";
 import type { TransactionDocument } from "@/src/server/models/Transaction";
 import { requireMembershipRole } from "@/src/server/workspace/members";
 import { upcomingRecurring } from "@/src/server/projection";
-import { billStatus, billTotals, isMonth, monthBounds, type BillItem } from "@/src/core/bills";
+import { billStatus, billTotals, isMonth, monthBounds, type BillItem, type BillMarker } from "@/src/core/bills";
+import { settingsOf } from "@/src/server/reminders";
 
 /**
  * A month of bills: recurring expenses (the ones recorded, and the ones
@@ -33,10 +34,14 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
         { date: { $gt: new Date(`${today}T23:59:59.999Z`) } },
       ],
     }).lean<TransactionDocument[]>();
-    // Occurrences take their name and how often they repeat from their rule.
-    const ruleIds = [...new Set(recorded.map((t) => t.recurringParentId).filter(Boolean).map(String))];
+    const coming = (await upcomingRecurring(ws, last)).filter((o) => o.type === "expense" && o.date >= first && o.date <= last);
+    // Occurrences take their name, how often they repeat and their reminders from their rule.
     const rules = new Map(
-      (await TransactionModel.find({ _id: { $in: ruleIds.map((id) => new Types.ObjectId(id)) } }).select("merchant note recurrence").lean<TransactionDocument[]>()).map((r) => [String(r._id), r]),
+      (
+        await TransactionModel.find({ workspaceId: ws, isRecurring: true, recurringParentId: null, deletedAt: null, type: "expense" })
+          .select("merchant note recurrence reminders")
+          .lean<TransactionDocument[]>()
+      ).map((r) => [String(r._id), r]),
     );
 
     const items: BillItem[] = recorded.map((t) => {
@@ -57,10 +62,9 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
         transactionId: String(t._id),
         ruleId,
         frequency: rule?.recurrence?.frequency ?? null,
+        ...(rule ? { reminders: settingsOf(rule) } : {}),
       };
     });
-
-    const coming = (await upcomingRecurring(ws, last)).filter((o) => o.type === "expense" && o.date >= first && o.date <= last);
     for (const o of coming) {
       items.push({
         id: `${o.ruleId}:${o.date}`,
@@ -76,9 +80,18 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
         transactionId: null,
         ruleId: o.ruleId ?? null,
         frequency: o.frequency ?? null,
+        reminders: o.ruleId && rules.has(o.ruleId) ? settingsOf(rules.get(o.ruleId)!) : null,
       });
     }
+    const markers: BillMarker[] = [...rules.values()].flatMap((rule) => {
+      const settings = settingsOf(rule);
+      const name = rule.merchant ?? rule.note ?? null;
+      return [
+        ...(settings?.trialEndsOn && settings.trialEndsOn >= first && settings.trialEndsOn <= last ? [{ date: settings.trialEndsOn, kind: "trial" as const, ruleId: String(rule._id), name }] : []),
+        ...(settings?.cancelBy && settings.cancelBy >= first && settings.cancelBy <= last ? [{ date: settings.cancelBy, kind: "cancel" as const, ruleId: String(rule._id), name }] : []),
+      ];
+    });
     items.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : b.amountMinor - a.amountMinor));
-    return { month, today, items, totals: billTotals(items) };
+    return { month, today, items, markers: markers.sort((a, b) => (a.date < b.date ? -1 : 1)), totals: billTotals(items) };
   });
 }

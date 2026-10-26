@@ -23,6 +23,16 @@ const recurrenceSchema = new Schema(
   { _id: false },
 );
 
+// A recurring rule's reminders: days of notice before each charge (null for none), and a trial's end and a date to cancel by.
+const reminderSettingsSchema = new Schema(
+  {
+    daysBefore: { type: Number, default: null },
+    trialEndsOn: { type: String, default: null },
+    cancelBy: { type: String, default: null },
+  },
+  { _id: false },
+);
+
 // One line of a split: its category and share, in the transaction's currency and in base.
 const splitSchema = new Schema(
   {
@@ -136,6 +146,8 @@ const transactionSchema = new Schema(
     receiptStorageKey: { type: String, default: null },
     isRecurring: { type: Boolean, default: false },
     recurrence: { type: recurrenceSchema, default: null },
+    // Recurring rules only; null keeps the default notice (see src/core/reminders.ts).
+    reminders: { type: reminderSettingsSchema, default: null },
     recurringParentId: {
       type: Schema.Types.ObjectId,
       ref: "Transaction",

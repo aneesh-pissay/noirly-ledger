@@ -8,6 +8,8 @@ import { qk } from "@/src/core/sync/query-keys";
 import { categoryTree } from "@/src/core/categories";
 import { calendarWeeks, shiftMonth, type BillItem, type BillStatus } from "@/src/core/bills";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
+import { ReminderDialog, describeReminders } from "@/src/features/bills/ReminderDialog";
+import type { ReminderSettings } from "@/src/core/reminders";
 
 type Props = { workspaceId: string };
 
@@ -33,7 +35,10 @@ export function BillCalendar({ workspaceId }: Props) {
   const name = (item: BillItem) => item.merchant ?? item.note ?? (item.categoryId ? categoryLabels.get(item.categoryId) : undefined) ?? "Bill";
   const kind = (item: BillItem) => (item.source === "emi" ? "EMI" : item.source === "scheduled" ? "Scheduled" : item.frequency ? `Repeats ${item.frequency}` : "Recurring");
 
+  const [editing, setEditing] = useState<{ id: string; name: string; settings: ReminderSettings | null } | null>(null);
   const items = bills.data?.items ?? [];
+  const markers = bills.data?.markers ?? [];
+  const markerText = (m: (typeof markers)[number]) => (m.kind === "trial" ? `Trial ends: ${m.name ?? "subscription"}` : `Cancel by: ${m.name ?? "subscription"}`);
   const today = bills.data?.today ?? "";
   const byDay = new Map<string, BillItem[]>();
   for (const item of items) byDay.set(item.date, [...(byDay.get(item.date) ?? []), item]);
@@ -71,6 +76,9 @@ export function BillCalendar({ workspaceId }: Props) {
                         {Number(day.slice(8))}
                       </span>
                       <ul className="mt-1 space-y-0.5">
+                        {markers.filter((m) => m.date === day).map((m) => (
+                          <li key={`${m.kind}-${m.ruleId}`} className="truncate text-[11px] italic leading-4 text-[var(--balance-negative)]">{markerText(m)}</li>
+                        ))}
                         {(byDay.get(day) ?? []).map((item) => (
                           <li key={item.id} className={`truncate text-[11px] leading-4 ${STATUS_TONE[item.status]}`} title={`${name(item)} · ${money(item.amountMinor, item.currency)} · ${STATUS_LABEL[item.status]}`}>
                             {item.status === "paid" ? "✓ " : ""}{name(item)} <span className="font-mono tabular-nums">{money(item.amountMinor, item.currency)}</span>
@@ -85,12 +93,32 @@ export function BillCalendar({ workspaceId }: Props) {
           ))}
         </div>
 
+        {markers.length ? (
+          <ul aria-label="Dates to act on" className="space-y-0.5 text-sm">
+            {markers.map((m) => (
+              <li key={`${m.kind}-${m.ruleId}`} data-bill-marker={m.kind} className="text-[var(--balance-negative)]">
+                <span className="font-mono text-xs tabular-nums">{m.date}</span> · {markerText(m)}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {items.length ? (
           <ul aria-label={`Bills in ${monthName(month)}`} className="divide-y divide-[var(--hairline)] rounded-xl border border-[var(--hairline)]">
             {items.map((item) => (
               <li key={item.id} data-bill-date={item.date} data-bill-status={item.status} className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 text-sm sm:grid-cols-[6rem_minmax(0,1fr)_9rem_7rem_5rem]">
                 <span className="font-mono text-xs tabular-nums text-[var(--muted-foreground)]">{item.date}</span>
-                <span className="truncate">{name(item)}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="truncate">{name(item)}</span>
+                  {item.ruleId ? (
+                    <span className="flex gap-2 text-[11px] text-[var(--muted-foreground)]">
+                      {describeReminders(item.reminders) ? <span className="truncate">{describeReminders(item.reminders)}</span> : null}
+                      <button type="button" className="underline" aria-label={`Reminders for ${name(item)} on ${item.date}`} onClick={() => setEditing({ id: item.ruleId!, name: name(item), settings: item.reminders ?? null })}>
+                        Reminders
+                      </button>
+                    </span>
+                  ) : null}
+                </span>
                 <span className="hidden truncate text-xs text-[var(--muted-foreground)] sm:block">{kind(item)}</span>
                 <span className="text-right font-mono tabular-nums">{money(item.amountMinor, item.currency)}</span>
                 <span className={`col-start-2 text-xs sm:col-start-auto sm:text-right ${STATUS_TONE[item.status]}`}>{STATUS_LABEL[item.status]}</span>
@@ -99,6 +127,7 @@ export function BillCalendar({ workspaceId }: Props) {
           </ul>
         ) : null}
       </div>
+      <ReminderDialog workspaceId={workspaceId} rule={editing} onClose={() => setEditing(null)} />
     </Card>
   );
 }

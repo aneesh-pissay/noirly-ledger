@@ -13,6 +13,7 @@ export const NOTIFICATION_KINDS = [
   "approval.decided",
   "goal.reached",
   "recurring.due",
+  "bill.reminder",
 ] as const;
 
 const notificationSchema = new Schema(
