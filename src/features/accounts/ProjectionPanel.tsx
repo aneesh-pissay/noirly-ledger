@@ -10,6 +10,7 @@ import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { isLiability } from "@/src/core/accounts";
 import { MoneyText } from "@/src/components/MoneyText";
 import type { UpcomingItem } from "@/src/core/sync/types";
+import { CashFlowCard } from "@/src/features/accounts/CashFlowCard";
 
 const WINDOWS = [
   { id: "30", label: "30 days" },
@@ -51,6 +52,8 @@ export function ProjectionPanel({ workspaceId }: { workspaceId: string }) {
         </p>
       ) : null}
 
+      <CashFlowCard flow={data.cashFlow} currency={data.baseCurrency} />
+
       <Card>
         <CardHeader>
           <CardTitle>Projected balances</CardTitle>
@@ -91,7 +94,7 @@ export function ProjectionPanel({ workspaceId }: { workspaceId: string }) {
                 <span className="font-mono tabular-nums text-[var(--muted-foreground)]">{item.date}</span>
                 <span className="min-w-0 truncate">
                   {item.label || item.type.charAt(0).toUpperCase() + item.type.slice(1)}
-                  <span className="text-[var(--muted-foreground)]"> · {where(item)}{item.recurring ? " · repeats" : ""}</span>
+                  <span className="text-[var(--muted-foreground)]"> · {where(item)}{item.recurring ? " · repeats" : ""}{item.bill ? " · bill to pay" : ""}</span>
                 </span>
                 <MoneyText
                   amountMinor={signed(item)}

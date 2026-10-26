@@ -1,3 +1,4 @@
+import type { CashFlow } from "@/src/core/cash-flow";
 import type {
   ApprovalStatus,
   BudgetPeriod,
@@ -681,6 +682,8 @@ export type UpcomingItem = {
   toAmountMinor: MoneyMinor | null;
   categoryId: string | null;
   recurring: boolean;
+  /** A bill paid by hand (see src/core/payments.ts), not a transaction yet. */
+  bill?: boolean;
   /** Recurring ones: the rule, its merchant and note, and how often it repeats. */
   ruleId?: string;
   merchant?: string | null;
@@ -706,5 +709,7 @@ export type Projection = {
     lowestDate: string | null;
   }>;
   upcoming: UpcomingItem[];
+  /** Money on hand day by day, in the base currency. */
+  cashFlow: CashFlow;
   missingRates: string[];
 };

@@ -1,11 +1,12 @@
 import { Types } from "mongoose";
 import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
-import { Account as AccountModel, Category, Transaction as TransactionModel, Workspace } from "@/src/server/models";
+import { Account as AccountModel, Category, ScheduledPayment, Transaction as TransactionModel, Workspace } from "@/src/server/models";
 import { requireMembershipRole } from "@/src/server/workspace/members";
 import { baseConverter, entriesByAccount } from "@/src/server/net-worth";
 import { balancesOn, type DatedEntry } from "@/src/core/net-worth";
 import { addDays, availableToSpend, projectAccount, unassignedEffect } from "@/src/core/projection";
+import { cashEffect, cashFlow, isCash, type CashEvent } from "@/src/core/cash-flow";
 import { dueOccurrences } from "@/src/core/recurrence/next";
 import type { AccountKind } from "@/src/core/accounts";
 import type { RecurrenceFrequency } from "@/src/core/models/enums";
@@ -88,10 +89,29 @@ async function scheduled(workspaceId: Types.ObjectId, today: string, through: st
   }));
 }
 
+/** Bills paid by hand not paid yet and due by `through`; overdue ones too, as they're still to go out. */
+async function billsToPay(workspaceId: Types.ObjectId, through: string): Promise<UpcomingItem[]> {
+  const docs = await ScheduledPayment.find({ workspaceId, paidOn: null, dueDate: { $lte: through } }).lean();
+  return docs.map((doc) => ({
+    date: doc.dueDate,
+    label: doc.name,
+    type: "expense" as const,
+    amountMinor: doc.amountMinor,
+    currency: doc.currency,
+    accountId: doc.accountId ? String(doc.accountId) : null,
+    toAccountId: null,
+    toAmountMinor: null,
+    categoryId: doc.categoryId ? String(doc.categoryId) : null,
+    recurring: false,
+    bill: true,
+  }));
+}
+
 /**
  * Where each open account is heading over the next `days` days from what's
- * already known (future-dated transactions and upcoming recurring ones), and
- * what's available to spend by then in the base currency.
+ * already known (future-dated transactions, upcoming recurring ones and
+ * bills to pay), what's available to spend by then in the base currency,
+ * and money on hand day by day.
  */
 export function getProjection(userId: string, workspaceId: string, days = 30): Promise<Projection> {
   return withDb(async () => {
@@ -103,15 +123,16 @@ export function getProjection(userId: string, workspaceId: string, days = 30): P
     const through = addDays(today, days);
 
     const accounts = await AccountModel.find({ workspaceId: workspace._id, archivedAt: null }).sort({ createdAt: 1 }).lean();
-    const [entries, toBase, recurring, dated, categories] = await Promise.all([
+    const [entries, toBase, recurring, dated, bills, categories] = await Promise.all([
       entriesByAccount(accounts.map((a) => a._id)),
       baseConverter(workspace._id, base),
       upcomingRecurring(workspace._id, through),
       scheduled(workspace._id, today, through),
+      billsToPay(workspace._id, through),
       Category.find({ workspaceId: workspace._id }).select("name").lean(),
     ]);
     const categoryName = new Map(categories.map((c) => [String(c._id), c.name]));
-    const upcoming = [...dated, ...recurring]
+    const upcoming = [...dated, ...recurring, ...bills]
       .map((item) => ({ ...item, label: item.label || (item.categoryId ? categoryName.get(item.categoryId) ?? "" : "") }))
       .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
 
@@ -156,10 +177,28 @@ export function getProjection(userId: string, workspaceId: string, days = 30): P
       };
     });
 
+    // Money on hand: cash, bank and wallets today, then what each item does to them.
+    const kindOf = new Map(accounts.map((a) => [String(a._id), a.kind as AccountKind]));
+    const currencyOf = new Map(accounts.map((a) => [String(a._id), a.currency]));
+    const startMinor = rows.reduce((sum, row) => sum + (isCash(row.kind) ? (toBase(row.todayMinor, row.currency, today) ?? 0) : 0), 0);
+    const events: CashEvent[] = upcoming.flatMap((item) => {
+      const from = item.accountId ? (kindOf.get(item.accountId) ?? null) : "none";
+      const to = item.toAccountId ? (kindOf.get(item.toAccountId) ?? null) : null;
+      const delta = cashEffect(item, from, to);
+      if (!delta) return [];
+      // Money coming back from a card or loan arrives in the cash account's currency.
+      const currency = item.type === "transfer" && delta > 0 && item.toAccountId ? (currencyOf.get(item.toAccountId) ?? item.currency) : item.currency;
+      const deltaMinor = toBase(delta, currency, today);
+      if (deltaMinor == null) return [];
+      const kind = item.type === "income" || item.type === "refund" ? "income" : delta < 0 ? "bill" : "other";
+      return [{ date: item.date, deltaMinor, label: item.label || item.type, kind }];
+    });
+
     return {
       baseCurrency: base,
       from: today,
       through,
+      cashFlow: cashFlow(startMinor, events, today, through),
       availableToSpendMinor: availableToSpend(
         rows.flatMap((row) => (row.projectedBaseMinor == null ? [] : [{ kind: row.kind, projectedBaseMinor: row.projectedBaseMinor }])),
         unassignedBaseMinor,
