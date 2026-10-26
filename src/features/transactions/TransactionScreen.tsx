@@ -18,6 +18,7 @@ import { BulkBar } from "@/src/features/transactions/BulkBar";
 import { BulkCreateDialog } from "@/src/features/transactions/BulkCreateDialog";
 import { BillCalendar } from "@/src/features/bills/BillCalendar";
 import { PaymentsPanel } from "@/src/features/bills/PaymentsPanel";
+import { SpottedSubscriptions } from "@/src/features/bills/SpottedSubscriptions";
 import { EmiPanel } from "@/src/features/installments/EmiPanel";
 import { TransactionDetails } from "@/src/features/transactions/TransactionDetails";
 import { DuplicatesPanel } from "@/src/features/transactions/DuplicatesPanel";
@@ -186,6 +187,7 @@ export function TransactionScreen({
         <div className="mt-6 space-y-6">
           <BillCalendar workspaceId={workspaceId} />
           <PaymentsPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
+          <SpottedSubscriptions workspaceId={workspaceId} />
           <EmiPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
         </div>
       ) : null}

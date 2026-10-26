@@ -304,6 +304,8 @@ export const payBodySchema = z.discriminatedUnion("how", [
   z.object({ how: z.literal("mark"), paidOn: isoDay }),
 ]);
 
+export const subscriptionKeyBodySchema = z.object({ key: z.string().min(3).max(200) });
+
 export const notDuplicateBodySchema = z.object({ otherId: z.string().min(1).max(64) });
 
 export const budgetCheckBodySchema = z.object({

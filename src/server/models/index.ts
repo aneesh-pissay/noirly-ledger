@@ -27,6 +27,7 @@ export { ImportBatch, type ImportBatchDocument } from "./ImportBatch";
 export { ReceiptInbox, type ReceiptInboxDocument } from "./ReceiptInbox";
 export { ReminderLog, type ReminderLogDocument } from "./ReminderLog";
 export { ScheduledPayment, type ScheduledPaymentDocument } from "./ScheduledPayment";
+export { SubscriptionDismissal, type SubscriptionDismissalDocument } from "./SubscriptionDismissal";
 export {
   TransactionChange,
   TransactionComment,

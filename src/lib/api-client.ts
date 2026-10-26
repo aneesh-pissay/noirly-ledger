@@ -45,6 +45,7 @@ import type { DuplicateReason } from "@/src/core/duplicates";
 import type { BillItem, BillMarker } from "@/src/core/bills";
 import type { ReminderSettings } from "@/src/core/reminders";
 import type { PaymentRepeat, PaymentView } from "@/src/core/payments";
+import type { SpottedSubscription } from "@/src/core/subscriptions";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -405,6 +406,15 @@ export const api = {
     return request<{ month: string; today: string; items: BillItem[]; markers: BillMarker[]; totals: Array<{ currency: string; paidMinor: number; toPayMinor: number }> }>(
       `/api/workspaces/${workspaceId}/bills?month=${month}`,
     );
+  },
+  listSpottedSubscriptions(workspaceId: string) {
+    return request<{ subscriptions: SpottedSubscription[] }>(`/api/workspaces/${workspaceId}/subscriptions`);
+  },
+  trackSubscription(workspaceId: string, key: string) {
+    return request<{ ruleId: string }>(`/api/workspaces/${workspaceId}/subscriptions/track`, { method: "POST", body: JSON.stringify({ key }) });
+  },
+  dismissSubscription(workspaceId: string, key: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/subscriptions/dismiss`, { method: "POST", body: JSON.stringify({ key }) });
   },
   listPayments(workspaceId: string) {
     return request<{ payments: PaymentView[] }>(`/api/workspaces/${workspaceId}/payments`);
