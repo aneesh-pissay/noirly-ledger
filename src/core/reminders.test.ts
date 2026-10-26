@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { datedReminders, isRenewal, reminderKey, remindersFor, reminderText } from "@/src/core/reminders";
+import { datedReminders, isRenewal, overdueReminder, reminderKey, remindersFor, reminderText } from "@/src/core/reminders";
 
 const today = "2026-10-26";
 const off = { daysBefore: null, trialEndsOn: null, cancelBy: null };
@@ -35,6 +35,14 @@ describe("bill reminders", () => {
       { kind: "cancel", on: "2026-10-28", stage: "ahead" },
     ]);
     expect(datedReminders({ ...off, trialEndsOn: "2026-10-30", cancelBy: "2026-10-25" }, today)).toEqual([]);
+  });
+
+  it("says a payment is overdue once, the day after (catching up a missed week)", () => {
+    expect(overdueReminder("2026-10-25", today)).toEqual({ kind: "overdue", on: "2026-10-25", stage: "today" });
+    expect(overdueReminder("2026-10-19", today)?.kind).toBe("overdue");
+    expect(overdueReminder("2026-10-18", today)).toBeNull();
+    expect(overdueReminder("2026-10-26", today)).toBeNull();
+    expect(reminderText({ kind: "overdue", on: "2026-10-25", stage: "today" }, "Electricity", "1,840.00 INR", today).title).toBe("Electricity is overdue");
   });
 
   it("goes once per stage, in plain words", () => {

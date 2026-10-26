@@ -1,7 +1,9 @@
 import { Types } from "mongoose";
 import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
-import { Transaction as TransactionModel } from "@/src/server/models";
+import { ScheduledPayment, Transaction as TransactionModel } from "@/src/server/models";
+import type { ScheduledPaymentDocument } from "@/src/server/models/ScheduledPayment";
+import { paymentStatus } from "@/src/core/payments";
 import type { TransactionDocument } from "@/src/server/models/Transaction";
 import { requireMembershipRole } from "@/src/server/workspace/members";
 import { upcomingRecurring } from "@/src/server/projection";
@@ -10,8 +12,8 @@ import { settingsOf } from "@/src/server/reminders";
 
 /**
  * A month of bills: recurring expenses (the ones recorded, and the ones
- * still to come), EMI installments, and other expenses entered ahead of
- * their date. Transfers and income aren't bills.
+ * still to come), EMI installments, other expenses entered ahead of their
+ * date, and bills paid by hand. Transfers and income aren't bills.
  */
 export function getBillCalendar(userId: string, workspaceId: string, month: string) {
   return withDb(async () => {
@@ -44,7 +46,11 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
       ).map((r) => [String(r._id), r]),
     );
 
-    const items: BillItem[] = recorded.map((t) => {
+    // Bills paid by hand; an expense that paid one shows as that payment, not twice.
+    const payments = await ScheduledPayment.find({ workspaceId: ws, dueDate: { $gte: first, $lte: last } }).lean<ScheduledPaymentDocument[]>();
+    const paying = new Set((await ScheduledPayment.find({ workspaceId: ws, transactionId: { $ne: null } }).select("transactionId").lean()).map((p) => String(p.transactionId)));
+
+    const items: BillItem[] = recorded.filter((t) => !paying.has(String(t._id))).map((t) => {
       const ruleId = t.recurringParentId ? String(t.recurringParentId) : t.isRecurring ? String(t._id) : null;
       const rule = ruleId ? (rules.get(ruleId) ?? t) : null;
       const date = t.date.toISOString().slice(0, 10);
@@ -81,6 +87,24 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
         ruleId: o.ruleId ?? null,
         frequency: o.frequency ?? null,
         reminders: o.ruleId && rules.has(o.ruleId) ? settingsOf(rules.get(o.ruleId)!) : null,
+      });
+    }
+    for (const payment of payments) {
+      const status = paymentStatus(payment.dueDate, today, Boolean(payment.paidOn));
+      items.push({
+        id: String(payment._id),
+        date: payment.dueDate,
+        merchant: payment.name,
+        note: payment.note ?? null,
+        amountMinor: payment.paidAmountMinor ?? payment.amountMinor,
+        currency: payment.currency,
+        categoryId: payment.categoryId ? String(payment.categoryId) : null,
+        accountId: payment.accountId ? String(payment.accountId) : null,
+        source: "payment",
+        status: status === "paid" ? "paid" : status === "overdue" ? "overdue" : payment.dueDate === today ? "due" : "upcoming",
+        transactionId: payment.transactionId ? String(payment.transactionId) : null,
+        ruleId: null,
+        frequency: payment.repeat && payment.repeat !== "none" ? payment.repeat : null,
       });
     }
     const markers: BillMarker[] = [...rules.values()].flatMap((rule) => {

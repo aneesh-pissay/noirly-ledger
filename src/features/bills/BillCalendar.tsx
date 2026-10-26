@@ -14,11 +14,12 @@ import type { ReminderSettings } from "@/src/core/reminders";
 type Props = { workspaceId: string };
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const STATUS_LABEL: Record<BillStatus, string> = { paid: "Paid", due: "Due", upcoming: "Upcoming" };
+const STATUS_LABEL: Record<BillStatus, string> = { paid: "Paid", due: "Due", upcoming: "Upcoming", overdue: "Overdue" };
 const STATUS_TONE: Record<BillStatus, string> = {
   paid: "text-[var(--muted-foreground)]",
   due: "text-[var(--balance-negative)]",
   upcoming: "text-[var(--foreground)]",
+  overdue: "font-medium text-[var(--balance-negative)]",
 };
 
 function monthName(month: string) {
@@ -33,7 +34,8 @@ export function BillCalendar({ workspaceId }: Props) {
   const categories = useQuery({ queryKey: qk.categories(workspaceId), queryFn: () => api.listCategories(workspaceId) });
   const categoryLabels = new Map(categoryTree(categories.data?.categories ?? []).map((c) => [c.id, c.label]));
   const name = (item: BillItem) => item.merchant ?? item.note ?? (item.categoryId ? categoryLabels.get(item.categoryId) : undefined) ?? "Bill";
-  const kind = (item: BillItem) => (item.source === "emi" ? "EMI" : item.source === "scheduled" ? "Scheduled" : item.frequency ? `Repeats ${item.frequency}` : "Recurring");
+  const kind = (item: BillItem) =>
+    item.source === "emi" ? "EMI" : item.source === "scheduled" ? "Scheduled" : item.source === "payment" ? (item.frequency ? `To pay, ${item.frequency}` : "To pay") : item.frequency ? `Repeats ${item.frequency}` : "Recurring";
 
   const [editing, setEditing] = useState<{ id: string; name: string; settings: ReminderSettings | null } | null>(null);
   const items = bills.data?.items ?? [];

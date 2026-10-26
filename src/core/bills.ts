@@ -6,10 +6,14 @@ import type { ReminderSettings } from "@/src/core/reminders";
  * of their date), each paid, due or still to come.
  */
 
-export type BillSource = "recurring" | "emi" | "scheduled";
+export type BillSource = "recurring" | "emi" | "scheduled" | "payment";
 
-/** Paid: recorded and its day has come. Due: its day has come but it isn't recorded yet. Upcoming: still ahead. */
-export type BillStatus = "paid" | "due" | "upcoming";
+/**
+ * Paid: recorded and its day has come. Due: its day has come but it isn't
+ * recorded yet. Upcoming: still ahead. Overdue: a payment made by hand whose
+ * due date has passed without it being marked paid.
+ */
+export type BillStatus = "paid" | "due" | "upcoming" | "overdue";
 
 export type BillItem = {
   /** The transaction's id, or the rule's id and date for an occurrence not recorded yet. */

@@ -11,6 +11,7 @@ import { ROLLOVER_MODES } from "@/src/core/budgets/rollover";
 import { WORKSPACE_PURPOSES } from "@/src/core/workspace-purpose";
 import { MAX_BULK, MAX_BULK_CREATE } from "@/src/core/bulk";
 import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
+import { PAYMENT_REPEATS } from "@/src/core/payments";
 import { DATE_FORMATS } from "@/src/core/imports";
 
 export const currencyCode = z
@@ -264,6 +265,34 @@ export const reminderSettingsSchema = z
     cancelBy: isoDay.nullable(),
   })
   .nullable();
+
+export const paymentBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  amountMajor: amountMajorSchema,
+  currency: currencyCode,
+  dueDate: isoDay,
+  accountId: z.string().min(1).max(64).nullable().optional(),
+  categoryId: z.string().min(1).max(64).nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
+  repeat: z.enum(PAYMENT_REPEATS).optional(),
+});
+
+export const paymentPatchSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  amountMajor: amountMajorSchema.optional(),
+  currency: currencyCode.optional(),
+  dueDate: isoDay.optional(),
+  accountId: z.string().min(1).max(64).nullable().optional(),
+  categoryId: z.string().min(1).max(64).nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
+  repeat: z.enum(PAYMENT_REPEATS).optional(),
+});
+
+export const payBodySchema = z.discriminatedUnion("how", [
+  z.object({ how: z.literal("record"), paidOn: isoDay, amountMajor: amountMajorSchema.nullable().optional(), accountId: z.string().min(1).max(64).nullable().optional() }),
+  z.object({ how: z.literal("link"), transactionId: z.string().min(1).max(64) }),
+  z.object({ how: z.literal("mark"), paidOn: isoDay }),
+]);
 
 export const notDuplicateBodySchema = z.object({ otherId: z.string().min(1).max(64) });
 

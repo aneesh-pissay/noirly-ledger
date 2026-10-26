@@ -5,7 +5,7 @@
  * what's due; each reminder goes once, and one missed day is caught up.
  */
 
-export type ReminderKind = "due" | "renewal" | "trial" | "cancel";
+export type ReminderKind = "due" | "renewal" | "trial" | "cancel" | "overdue";
 
 /** A recurring rule's reminder settings; daysBefore null turns due-date reminders off. */
 export type ReminderSettings = {
@@ -75,6 +75,15 @@ export function datedReminders(settings: ReminderSettings | null, today: string)
   return out;
 }
 
+/** How long after its due date an unpaid payment still gets its one overdue reminder (so a missed run catches up). */
+export const OVERDUE_CATCH_UP_DAYS = 7;
+
+/** One reminder the day after a payment made by hand was due, if it's still not paid. */
+export function overdueReminder(dueDate: string, today: string): Reminder | null {
+  const late = -daysUntil(today, dueDate);
+  return late >= 1 && late <= OVERDUE_CATCH_UP_DAYS ? { kind: "overdue", on: dueDate, stage: "today" } : null;
+}
+
 /** The key that makes each reminder go once. */
 export function reminderKey(itemId: string, reminder: Reminder) {
   return `${reminder.kind}:${itemId}:${reminder.on}:${reminder.stage}`;
@@ -94,6 +103,8 @@ export function reminderText(reminder: Reminder, name: string, amount: string, t
         title: left === 0 ? `${name}'s free trial ends today` : `${name}'s free trial ends ${left === 1 ? "tomorrow" : `in ${left} days`}`,
         body: `After the trial it costs ${amount}. Cancel before it ends if you don't want to pay.`,
       };
+    case "overdue":
+      return { title: `${name} is overdue`, body: `${amount} was due on ${reminder.on} and isn't marked paid.` };
     case "cancel":
       return { title: left === 0 ? `Cancel ${name} today` : `Cancel ${name} by ${reminder.on}`, body: `You meant to cancel ${name} (${amount}) by ${reminder.on}.` };
   }

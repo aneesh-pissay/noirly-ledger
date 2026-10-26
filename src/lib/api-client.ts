@@ -44,6 +44,7 @@ import type { ColumnMapping } from "@/src/core/imports";
 import type { DuplicateReason } from "@/src/core/duplicates";
 import type { BillItem, BillMarker } from "@/src/core/bills";
 import type { ReminderSettings } from "@/src/core/reminders";
+import type { PaymentRepeat, PaymentView } from "@/src/core/payments";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -404,6 +405,30 @@ export const api = {
     return request<{ month: string; today: string; items: BillItem[]; markers: BillMarker[]; totals: Array<{ currency: string; paidMinor: number; toPayMinor: number }> }>(
       `/api/workspaces/${workspaceId}/bills?month=${month}`,
     );
+  },
+  listPayments(workspaceId: string) {
+    return request<{ payments: PaymentView[] }>(`/api/workspaces/${workspaceId}/payments`);
+  },
+  createPayment(workspaceId: string, body: { name: string; amountMajor: string; currency: string; dueDate: string; accountId?: string | null; categoryId?: string | null; note?: string | null; repeat?: PaymentRepeat }) {
+    return request<{ payment: PaymentView }>(`/api/workspaces/${workspaceId}/payments`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updatePayment(paymentId: string, body: Partial<{ name: string; amountMajor: string; currency: string; dueDate: string; accountId: string | null; categoryId: string | null; note: string | null; repeat: PaymentRepeat }>) {
+    return request<{ payment: PaymentView }>(`/api/payments/${paymentId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deletePayment(paymentId: string) {
+    return request<{ ok: boolean }>(`/api/payments/${paymentId}`, { method: "DELETE" });
+  },
+  payPayment(
+    paymentId: string,
+    body: { how: "record"; paidOn: string; amountMajor?: string | null; accountId?: string | null } | { how: "link"; transactionId: string } | { how: "mark"; paidOn: string },
+  ) {
+    return request<{ payment: PaymentView; next: PaymentView | null }>(`/api/payments/${paymentId}/pay`, { method: "POST", body: JSON.stringify(body) });
+  },
+  undoPayment(paymentId: string) {
+    return request<{ payment: PaymentView }>(`/api/payments/${paymentId}/undo`, { method: "POST" });
+  },
+  paymentMatches(paymentId: string) {
+    return request<{ matches: Transaction[] }>(`/api/payments/${paymentId}/matches`);
   },
   setReminders(ruleId: string, settings: ReminderSettings | null) {
     return request<{ reminders: ReminderSettings | null }>(`/api/transactions/${ruleId}/reminders`, { method: "PUT", body: JSON.stringify(settings) });
