@@ -9,6 +9,7 @@ import { Input, Label } from "@noirly-dev/ui";
 import { ProgressBar } from "@/src/components/ProgressBar";
 import { MoneyText } from "@/src/components/MoneyText";
 import { SinkingFunds } from "@/src/features/savings-goals/SinkingFunds";
+import { GoalForecastView } from "@/src/features/savings-goals/GoalForecastView";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -39,6 +40,12 @@ export function GoalsScreen({ workspaceId, baseCurrency }: Props) {
       setTargetDate("");
       void queryClient.invalidateQueries({ queryKey: qk.savingsGoals(workspaceId) });
     },
+  });
+
+  // Under the goals' key, so whatever refreshes the goals refreshes these.
+  const forecasts = useQuery({
+    queryKey: [...qk.savingsGoals(workspaceId), "forecasts"],
+    queryFn: () => api.listGoalForecasts(workspaceId),
   });
 
   const add = useMutation({
@@ -95,7 +102,7 @@ export function GoalsScreen({ workspaceId, baseCurrency }: Props) {
             ? goal.currentAmountMinor / goal.targetAmountMinor
             : 0;
           return (
-            <li key={goal.id} className="surface grain rounded-[var(--r-lg)] p-4">
+            <li key={goal.id} data-goal={goal.name} className="surface grain rounded-[var(--r-lg)] p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium">{goal.name}</p>
                 {goal.targetDate ? (
@@ -109,6 +116,9 @@ export function GoalsScreen({ workspaceId, baseCurrency }: Props) {
                 <MoneyText amountMinor={goal.currentAmountMinor} currency={goal.currency} />
                 <MoneyText amountMinor={goal.targetAmountMinor} currency={goal.currency} />
               </div>
+              {forecasts.data?.forecasts[goal.id] ? (
+                <GoalForecastView forecast={forecasts.data.forecasts[goal.id]!} currency={goal.currency} targetDate={goal.targetDate} />
+              ) : null}
               <form
                 className="mt-3 flex gap-2"
                 onSubmit={(event) => {

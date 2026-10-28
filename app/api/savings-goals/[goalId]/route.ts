@@ -11,10 +11,7 @@ export async function POST(
     await assertObjectId(goalId, "goalId");
     const body = contributeGoalBodySchema.parse(await request.json());
     const { sync } = await getLedgerProvider();
-    const goal = await sync.contributeToGoal(
-      goalId,
-      parseMajorToMinor(body.amountMajor),
-    );
+    const goal = await sync.contributeToGoal(goalId, parseMajorToMinor(body.amountMajor), body.date);
     return jsonOk({ goal });
   } catch (error) {
     return jsonError(error);

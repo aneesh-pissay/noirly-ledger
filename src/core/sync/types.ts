@@ -232,7 +232,8 @@ export type NotificationKind =
   | "goal.reached"
   | "recurring.due"
   | "bill.reminder"
-  | "subscription.price";
+  | "subscription.price"
+  | "goal.milestone";
 
 export type InAppNotification = {
   id: string;
@@ -574,7 +575,8 @@ export interface LedgerSyncProvider {
   createBudgetPool(input: CreateBudgetPoolInput): Promise<BudgetPool>;
   listSavingsGoals(workspaceId: string): Promise<SavingsGoal[]>;
   upsertSavingsGoal(input: UpsertSavingsGoalInput): Promise<SavingsGoal>;
-  contributeToGoal(id: string, amountMinor: number): Promise<SavingsGoal>;
+  /** Adds to a goal (or takes out, negative), on `date` (YYYY-MM-DD, today if left out). */
+  contributeToGoal(id: string, amountMinor: number, date?: string): Promise<SavingsGoal>;
   deleteSavingsGoal(id: string): Promise<void>;
   listApprovals(query: {
     workspaceId: string;

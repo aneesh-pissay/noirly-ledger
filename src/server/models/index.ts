@@ -29,6 +29,7 @@ export { ReminderLog, type ReminderLogDocument } from "./ReminderLog";
 export { ScheduledPayment, type ScheduledPaymentDocument } from "./ScheduledPayment";
 export { SubscriptionDismissal, type SubscriptionDismissalDocument } from "./SubscriptionDismissal";
 export { SinkingFund, type SinkingFundDocument } from "./SinkingFund";
+export { GoalContribution, type GoalContributionDocument } from "./GoalContribution";
 export {
   TransactionChange,
   TransactionComment,

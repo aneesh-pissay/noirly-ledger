@@ -354,6 +354,8 @@ export const upsertGoalBodySchema = z.object({
 
 export const contributeGoalBodySchema = z.object({
   amountMajor: amountMajorSchema,
+  /** The day it went in, for money added before it was recorded here. */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export const upsertFxRateBodySchema = z.object({

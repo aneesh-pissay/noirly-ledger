@@ -19,7 +19,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | 1. Accounts and the money model | 10 / 10 |
 | 2. Budgeting | 9 / 9 |
 | 3. Transactions and imports | 10 / 11 |
-| 4. Bills, subscriptions, savings and debt | 8 / 13 |
+| 4. Bills, subscriptions, savings and debt | 9 / 13 |
 | 5. Team expense management | 0 / 10 |
 | 6. Reports and analytics | 0 / 9 |
 | 7. Automations and integrations | 0 / 8 |
@@ -103,7 +103,7 @@ _Needs Phase 1 accounts._
 - [x] Price-increase alerts and duplicate or unused subscription insights (M) — done 2026-10-26
 - [x] Bill-based cash-flow projection (M) — done 2026-10-26
 - [x] Sinking funds for upcoming expenses (M) — done 2026-10-26
-- [ ] Goal milestones and forecasts (when you'll reach it at this pace) (S)
+- [x] Goal milestones and forecasts (when you'll reach it at this pace) (S) — done 2026-10-28
 - [ ] Shared goals with family contributions (M)
 - [ ] Loan and EMI repayment schedules (M)
 - [ ] Debt snowball and avalanche plans, with interest and early-repayment simulation (L)

@@ -48,6 +48,7 @@ import type { PaymentRepeat, PaymentView } from "@/src/core/payments";
 import type { SpottedSubscription } from "@/src/core/subscriptions";
 import type { SubscriptionInsight } from "@/src/core/subscription-insights";
 import type { FundRepeat, FundSuggestion, SinkingFundView } from "@/src/core/sinking-funds";
+import type { GoalForecast } from "@/src/core/goal-forecast";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -377,11 +378,14 @@ export const api = {
       { method: "POST", body: JSON.stringify(body) },
     );
   },
-  contributeGoal(goalId: string, amountMajor: string) {
+  contributeGoal(goalId: string, amountMajor: string, date?: string) {
     return request<{ goal: SavingsGoal }>(`/api/savings-goals/${goalId}`, {
       method: "POST",
-      body: JSON.stringify({ amountMajor }),
+      body: JSON.stringify({ amountMajor, ...(date ? { date } : {}) }),
     });
+  },
+  listGoalForecasts(workspaceId: string) {
+    return request<{ forecasts: Record<string, GoalForecast> }>(`/api/workspaces/${workspaceId}/savings-goals/forecasts`);
   },
   deleteGoal(goalId: string) {
     return request<{ ok: boolean }>(`/api/savings-goals/${goalId}`, {

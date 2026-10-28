@@ -40,6 +40,7 @@ import {
   LedgerUser,
   Notification as NotificationModel,
   SavingsGoal as SavingsGoalModel,
+  GoalContribution,
   Transaction as TransactionModel,
   Workspace as WorkspaceModel,
   WorkspaceMember,
@@ -87,6 +88,8 @@ import { gstFields, gstSettingsOf } from "@/src/server/gst";
 import { checkGstSettings } from "@/src/core/gst";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
+import { milestonesCrossed } from "@/src/core/goal-forecast";
+import { formatMoney } from "@/src/core/locale-format";
 
 type ProviderContext = {
   userId: string;
@@ -860,11 +863,13 @@ export function createMongoLedgerProvider(
       });
     },
 
-    async contributeToGoal(id: string, amountMinor: number): Promise<SavingsGoal> {
+    async contributeToGoal(id: string, amountMinor: number, date?: string): Promise<SavingsGoal> {
       return withDb(async () => {
         const existing = await SavingsGoalModel.findById(oid(id)).select("workspaceId");
         if (!existing) throw new ApiError(404, "not_found", "Goal not found");
         await requireMembership(ctx.userId, existing.workspaceId.toString());
+        const today = new Date().toISOString().slice(0, 10);
+        if (date && date > today) throw new ApiError(400, "invalid_request", "A contribution can't be dated ahead");
         // $inc in the database, so two contributions at once both count.
         const added = await SavingsGoalModel.findOneAndUpdate(
           { _id: existing._id },
@@ -872,6 +877,21 @@ export function createMongoLedgerProvider(
           { returnDocument: "after" },
         );
         if (!added) throw new ApiError(404, "not_found", "Goal not found");
+        // Logged with its day: the goal's pace and milestones come from these.
+        await GoalContribution.create({ workspaceId: existing.workspaceId, goalId: existing._id, amountMinor, date: date ?? today, createdById: oid(ctx.userId) });
+        // Passing a quarter, half or three quarters of the way is worth a word (reaching it has its own below).
+        const crossed = milestonesCrossed(added.targetAmountMinor, added.currentAmountMinor - amountMinor, added.currentAmountMinor).filter((p) => p < 100);
+        if (crossed.length) {
+          const percent = crossed.at(-1)!;
+          await notifyUsers({
+            userIds: [ctx.userId],
+            workspaceId: added.workspaceId.toString(),
+            kind: "goal.milestone",
+            title: percent === 50 ? `Halfway to ${added.name}` : `${percent}% of the way to ${added.name}`,
+            body: `${added.name} has ${formatMoney(added.currentAmountMinor, added.currency)} of ${formatMoney(added.targetAmountMinor, added.currency)}.`,
+            href: "/goals",
+          });
+        }
         // Only the contribution that crosses the target marks it complete.
         const completed = await SavingsGoalModel.findOneAndUpdate(
           {
@@ -903,6 +923,7 @@ export function createMongoLedgerProvider(
         if (!doc) throw new ApiError(404, "not_found", "Goal not found");
         await requireMembership(ctx.userId, doc.workspaceId.toString());
         await doc.deleteOne();
+        await GoalContribution.deleteMany({ goalId: doc._id });
       });
     },
 

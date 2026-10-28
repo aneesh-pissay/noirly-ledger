@@ -15,6 +15,7 @@ export const NOTIFICATION_KINDS = [
   "recurring.due",
   "bill.reminder",
   "subscription.price",
+  "goal.milestone",
 ] as const;
 
 const notificationSchema = new Schema(
