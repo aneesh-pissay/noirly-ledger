@@ -29,6 +29,7 @@ import type {
   InAppNotification,
   MemberRole,
   MemberView,
+  CustomRoleView,
   SavingsGoal,
   Transaction,
   InboxReceipt,
@@ -52,6 +53,7 @@ import type { GoalForecast } from "@/src/core/goal-forecast";
 import type { LoanView } from "@/src/core/loans";
 import type { DebtStrategy, DebtView } from "@/src/core/debts";
 import type { CardTerms, CardView } from "@/src/core/credit-cards";
+import type { PermissionAction } from "@/src/core/permissions/can";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -605,11 +607,23 @@ export const api = {
       `/api/workspaces/${workspaceId}/members`,
     );
   },
-  updateMember(workspaceId: string, userId: string, role: MemberRole) {
-    return request<{ member: { userId: string; role: MemberRole } }>(
+  updateMember(workspaceId: string, userId: string, role: MemberRole, customRoleId?: string | null) {
+    return request<{ member: { userId: string; role: MemberRole; customRoleId: string | null } }>(
       `/api/workspaces/${workspaceId}/members`,
-      { method: "PATCH", body: JSON.stringify({ userId, role }) },
+      { method: "PATCH", body: JSON.stringify({ userId, role, ...(customRoleId !== undefined ? { customRoleId } : {}) }) },
     );
+  },
+  listRoles(workspaceId: string) {
+    return request<{ roles: CustomRoleView[] }>(`/api/workspaces/${workspaceId}/roles`);
+  },
+  createRole(workspaceId: string, body: { name: string; permissions: PermissionAction[] }) {
+    return request<{ role: CustomRoleView }>(`/api/workspaces/${workspaceId}/roles`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateRole(workspaceId: string, roleId: string, body: { name?: string; permissions?: PermissionAction[] }) {
+    return request<{ role: CustomRoleView }>(`/api/workspaces/${workspaceId}/roles/${roleId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteRole(workspaceId: string, roleId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/roles/${roleId}`, { method: "DELETE" });
   },
   removeMember(workspaceId: string, userId: string) {
     return request<{ ok: boolean }>(

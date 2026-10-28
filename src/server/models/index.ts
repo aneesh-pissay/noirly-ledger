@@ -32,6 +32,7 @@ export { SinkingFund, type SinkingFundDocument } from "./SinkingFund";
 export { GoalContribution, type GoalContributionDocument } from "./GoalContribution";
 export { LoanPlan, type LoanPlanDocument } from "./LoanPlan";
 export { DebtSettings, type DebtSettingsDocument } from "./DebtSettings";
+export { WorkspaceRole, type WorkspaceRoleDocument } from "./WorkspaceRole";
 export {
   TransactionChange,
   TransactionComment,

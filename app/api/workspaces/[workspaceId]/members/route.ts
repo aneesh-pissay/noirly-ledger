@@ -24,8 +24,8 @@ export async function PATCH(
   try {
     const { workspaceId } = await params;
     await assertObjectId(workspaceId, "workspaceId");
-    const body = (await request.json()) as { userId?: string; role?: string };
-    const parsed = updateMemberBodySchema.parse({ role: body.role });
+    const body = (await request.json()) as { userId?: string; role?: string; customRoleId?: string | null };
+    const parsed = updateMemberBodySchema.parse({ role: body.role, customRoleId: body.customRoleId });
     if (!body.userId) throw new Error("userId is required");
     const { ctx } = await getLedgerProvider();
     const member = await updateMemberRole({
@@ -33,6 +33,7 @@ export async function PATCH(
       workspaceId,
       targetUserId: body.userId,
       role: parsed.role,
+      customRoleId: parsed.customRoleId,
     });
     return jsonOk({ member });
   } catch (error) {

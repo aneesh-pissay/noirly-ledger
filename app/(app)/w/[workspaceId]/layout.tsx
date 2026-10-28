@@ -26,7 +26,7 @@ export default async function WorkspaceLayout({
   });
 
   return (
-    <WorkspaceRoleProvider role={workspace.role}>
+    <WorkspaceRoleProvider grant={workspace.grant}>
       <WorkspaceRealtime workspaceId={workspaceId} />
       {children}
     </WorkspaceRoleProvider>

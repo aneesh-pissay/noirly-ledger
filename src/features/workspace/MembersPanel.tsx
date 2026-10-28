@@ -5,6 +5,8 @@ import { useState } from "react";
 import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import type { MemberRole } from "@/src/core/models/enums";
+import type { MemberView } from "@/src/core/sync/types";
+import { CustomRoles, rolesKey } from "@/src/features/workspace/CustomRoles";
 
 const ROLES: MemberRole[] = ["owner", "approver", "member"];
 const INVITE_ROLES: Array<Exclude<MemberRole, "owner">> = ["approver", "member"];
@@ -38,9 +40,12 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
     onError: (err: Error) => setError(err.message),
   });
 
+  const roles = useQuery({ queryKey: rolesKey(workspaceId), queryFn: () => api.listRoles(workspaceId) });
+  const customRoles = roles.data?.roles ?? [];
+
   const roleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: MemberRole }) =>
-      api.updateMember(workspaceId, userId, role),
+    mutationFn: ({ userId, role, customRoleId }: { userId: string; role: MemberRole; customRoleId?: string | null }) =>
+      api.updateMember(workspaceId, userId, role, customRoleId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
     },
@@ -56,6 +61,16 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
   });
 
   const members = membersQuery.data?.members ?? [];
+
+  /** A built-in role ("member") or a custom one ("custom:<id>"), as the role picker holds it. */
+  const pickRole = (member: MemberView, value: string) => {
+    if (value.startsWith("custom:")) {
+      // A custom role decides what they may do; an owner given one becomes a member with it.
+      roleMutation.mutate({ userId: member.userId, role: member.role === "owner" ? "member" : member.role, customRoleId: value.slice(7) });
+    } else {
+      roleMutation.mutate({ userId: member.userId, role: value as MemberRole, customRoleId: null });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -128,13 +143,9 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
                 <td className="px-4 py-3">
                   {canManage && member.userId !== currentUserId ? (
                     <select
-                      value={member.role}
-                      onChange={(event) =>
-                        roleMutation.mutate({
-                          userId: member.userId,
-                          role: event.target.value as MemberRole,
-                        })
-                      }
+                      aria-label={`Role of ${member.displayName}`}
+                      value={member.customRoleId ? `custom:${member.customRoleId}` : member.role}
+                      onChange={(event) => pickRole(member, event.target.value)}
                       className="h-9 rounded-md border border-[var(--hairline)] bg-[var(--surface-2)] px-2 text-xs text-[var(--foreground)]"
                     >
                       {ROLES.map((role) => (
@@ -142,10 +153,15 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
                           {role}
                         </option>
                       ))}
+                      {customRoles.map((r) => (
+                        <option key={r.id} value={`custom:${r.id}`}>
+                          {r.name}
+                        </option>
+                      ))}
                     </select>
                   ) : (
                     <span className="font-mono text-xs uppercase text-[var(--muted-foreground)]">
-                      {member.role}
+                      {member.customRoleName ?? member.role}
                     </span>
                   )}
                 </td>
@@ -167,6 +183,7 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
           </tbody>
         </table>
       </section>
+      {canManage ? <CustomRoles workspaceId={workspaceId} /> : null}
       {error ? (
         <p className="text-sm text-[var(--balance-negative)]" role="alert">
           {error}

@@ -20,7 +20,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | 2. Budgeting | 9 / 9 |
 | 3. Transactions and imports | 10 / 11 |
 | 4. Bills, subscriptions, savings and debt | 13 / 13 |
-| 5. Team expense management | 0 / 10 |
+| 5. Team expense management | 1 / 10 |
 | 6. Reports and analytics | 0 / 9 |
 | 7. Automations and integrations | 0 / 8 |
 | 8. Security, privacy and audit | 0 / 7 |
@@ -111,7 +111,7 @@ _Needs Phase 1 accounts._
 
 ## Phase 5 — Team expense management
 
-- [ ] Custom roles and permissions per workspace (M)
+- [x] Custom roles and permissions per workspace (M) — done 2026-10-28
 - [ ] Multi-level conditional approvals (by amount, category, pool) (L)
 - [ ] Delegated approval while away, and a full approval audit history (M)
 - [ ] Employee reimbursement requests and payout tracking (M)

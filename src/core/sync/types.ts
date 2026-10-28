@@ -1,3 +1,4 @@
+import type { Grant, PermissionAction } from "@/src/core/permissions/can";
 import type { CashFlow } from "@/src/core/cash-flow";
 import type {
   ApprovalStatus,
@@ -44,7 +45,11 @@ export type Workspace = {
   updatedAt: string;
 };
 
-export type WorkspaceWithRole = Workspace & { role: MemberRole };
+export type WorkspaceWithRole = Workspace & {
+  role: MemberRole;
+  /** What the person may do here: their role, or their custom role's permissions. */
+  grant: Grant;
+};
 
 export type WorkspaceMember = {
   id: string;
@@ -253,7 +258,13 @@ export type MemberView = {
   email: string;
   displayName: string;
   role: MemberRole;
+  /** A custom role the workspace gave them, if any. */
+  customRoleId: string | null;
+  customRoleName: string | null;
 };
+
+/** A role a workspace defined for itself. */
+export type CustomRoleView = { id: string; name: string; permissions: PermissionAction[]; memberCount: number };
 
 export type ApprovalView = ApprovalRequest & {
   transaction: Transaction;

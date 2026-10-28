@@ -1,26 +1,26 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
-import { can, type PermissionAction } from "@/src/core/permissions/can";
-import type { MemberRole } from "@/src/core/models/enums";
+import { can, type Grant, type PermissionAction } from "@/src/core/permissions/can";
 
-const WorkspaceRoleContext = createContext<MemberRole>("member");
+/** What the person may do in the workspace being viewed: their role, or their custom role's permissions. */
+const WorkspaceRoleContext = createContext<Grant>("member");
 
 export function WorkspaceRoleProvider({
-  role,
+  grant,
   children,
 }: {
-  role: MemberRole;
+  grant: Grant;
   children: ReactNode;
 }) {
   return (
-    <WorkspaceRoleContext.Provider value={role}>
+    <WorkspaceRoleContext.Provider value={grant}>
       {children}
     </WorkspaceRoleContext.Provider>
   );
 }
 
-export function useWorkspaceRole(): MemberRole {
+export function useWorkspaceRole(): Grant {
   return useContext(WorkspaceRoleContext);
 }
 

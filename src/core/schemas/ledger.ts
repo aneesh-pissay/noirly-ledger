@@ -442,6 +442,18 @@ export const createInviteBodySchema = z.object({
 
 export const updateMemberBodySchema = z.object({
   role: z.enum(["owner", "approver", "member"]),
+  /** A custom role to give them, or null to take it away. */
+  customRoleId: z.string().min(1).max(64).nullable().optional(),
+});
+
+export const customRoleBodySchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  permissions: z.array(z.string().max(40)).max(20),
+});
+
+export const customRolePatchSchema = z.object({
+  name: z.string().trim().min(1).max(40).optional(),
+  permissions: z.array(z.string().max(40)).max(20).optional(),
 });
 
 export const createProjectBodySchema = z.object({

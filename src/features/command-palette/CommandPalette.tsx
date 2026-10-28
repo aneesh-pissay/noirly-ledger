@@ -105,7 +105,7 @@ export function CommandPalette({ workspaces }: Props) {
                     { href: `/w/${teamId}`, label: "Dashboard" },
                     { href: `/w/${teamId}/pools`, label: "Budget pools" },
                     { href: `/w/${teamId}/expenses`, label: "Expenses" },
-                    ...(team && can(team.role, "expense.decide")
+                    ...(team && can(team.grant, "expense.decide")
                       ? [{ href: `/w/${teamId}/approvals`, label: "Approvals" }]
                       : []),
                     { href: `/w/${teamId}/members`, label: "Members" },

@@ -58,7 +58,7 @@ import {
 } from "@/src/server/mappers";
 import { ApiError } from "@/src/server/api/http";
 import { seedSystemCategories } from "@/src/server/categories/seed";
-import { listMembers, requireAction, requireMembershipRole } from "@/src/server/workspace/members";
+import { grantFor, listMembers, requireAction, requireMembershipRole } from "@/src/server/workspace/members";
 import { can } from "@/src/core/permissions/can";
 import {
   afterCursorFilter,
@@ -204,13 +204,13 @@ export function createMongoLedgerProvider(
           userId: oid(ctx.userId),
         }).lean();
         const ids = memberships.map((m) => m.workspaceId);
-        const roleById = new Map(
-          memberships.map((m) => [m.workspaceId.toString(), m.role as MemberRole]),
-        );
+        const byWorkspace = new Map(memberships.map((m) => [m.workspaceId.toString(), m]));
+        const grants = new Map(await Promise.all(memberships.map(async (m) => [m.workspaceId.toString(), await grantFor(m)] as const)));
         const workspaces = await WorkspaceModel.find({ _id: { $in: ids } });
         return workspaces.map((doc) => ({
           ...mapWorkspace(doc),
-          role: roleById.get(doc._id.toString()) ?? "member",
+          role: (byWorkspace.get(doc._id.toString())?.role ?? "member") as MemberRole,
+          grant: grants.get(doc._id.toString()) ?? "member",
         }));
       });
     },
@@ -225,6 +225,7 @@ export function createMongoLedgerProvider(
         return {
           ...mapWorkspace(workspace),
           role: membership.role as MemberRole,
+          grant: await grantFor(membership),
         };
       });
     },
@@ -949,7 +950,7 @@ export function createMongoLedgerProvider(
     }): Promise<ApprovalView[]> {
       return withDb(async () => {
         const membership = await requireMembership(ctx.userId, query.workspaceId);
-        const isDecider = can(membership.role as MemberRole, "expense.decide");
+        const isDecider = can(await grantFor(membership), "expense.decide");
         const otherDecider = isDecider
           ? Boolean(await WorkspaceMember.exists({
               workspaceId: oid(query.workspaceId),

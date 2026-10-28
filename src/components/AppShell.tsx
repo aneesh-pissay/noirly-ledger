@@ -79,7 +79,8 @@ export function AppShell({ user, workspaces, children }: Props) {
     !pathname.startsWith("/settings") &&
     pathname !== "/login";
 
-  const teamRole = teams.find((w) => w.id === activeWorkspaceId)?.role ?? "member";
+  // What the person may do in the workspace open: their role, or a custom role's permissions.
+  const teamRole = teams.find((w) => w.id === activeWorkspaceId)?.grant ?? "member";
   const composerWorkspace = (pathname.startsWith("/w/") ? teams.find((w) => w.id === activeWorkspaceId) : undefined) ?? personal;
 
   useEffect(() => {
