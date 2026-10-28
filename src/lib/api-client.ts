@@ -384,6 +384,9 @@ export const api = {
       body: JSON.stringify({ amountMajor, ...(date ? { date } : {}) }),
     });
   },
+  setGoalPledge(goalId: string, monthlyMajor: string) {
+    return request<{ monthlyMinor: number }>(`/api/savings-goals/${goalId}/pledge`, { method: "PUT", body: JSON.stringify({ monthlyMajor }) });
+  },
   listGoalForecasts(workspaceId: string) {
     return request<{ forecasts: Record<string, GoalForecast> }>(`/api/workspaces/${workspaceId}/savings-goals/forecasts`);
   },

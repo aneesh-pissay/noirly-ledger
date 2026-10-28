@@ -23,11 +23,11 @@ export const PURPOSE_DESCRIPTION: Record<WorkspacePurpose, string> = {
 };
 
 /** The pages a shared workspace shows, in the order of its menu. */
-export type WorkspaceSection = "transactions" | "accounts" | "budgets" | "pools" | "expenses" | "approvals";
+export type WorkspaceSection = "transactions" | "accounts" | "budgets" | "pools" | "goals" | "expenses" | "approvals";
 
 export const PURPOSE_SECTIONS: Record<WorkspacePurpose, WorkspaceSection[]> = {
   team: ["pools", "expenses", "approvals"],
-  household: ["transactions", "accounts", "budgets", "pools"],
+  household: ["transactions", "accounts", "budgets", "pools", "goals"],
   business: ["transactions", "accounts", "budgets", "expenses", "approvals", "pools"],
 };
 

@@ -117,7 +117,7 @@ export function GoalsScreen({ workspaceId, baseCurrency }: Props) {
                 <MoneyText amountMinor={goal.targetAmountMinor} currency={goal.currency} />
               </div>
               {forecasts.data?.forecasts[goal.id] ? (
-                <GoalForecastView forecast={forecasts.data.forecasts[goal.id]!} currency={goal.currency} targetDate={goal.targetDate} />
+                <GoalForecastView forecast={forecasts.data.forecasts[goal.id]!} currency={goal.currency} targetDate={goal.targetDate} goalId={goal.id} goalName={goal.name} workspaceId={workspaceId} />
               ) : null}
               <form
                 className="mt-3 flex gap-2"

@@ -879,6 +879,22 @@ export function createMongoLedgerProvider(
         if (!added) throw new ApiError(404, "not_found", "Goal not found");
         // Logged with its day: the goal's pace and milestones come from these.
         await GoalContribution.create({ workspaceId: existing.workspaceId, goalId: existing._id, amountMinor, date: date ?? today, createdById: oid(ctx.userId) });
+        // Saving together: the others hear when someone puts money in.
+        const workspace = await WorkspaceModel.findById(existing.workspaceId).select("kind").lean();
+        if (workspace && workspace.kind !== "personal" && amountMinor > 0) {
+          const [others, me] = await Promise.all([
+            WorkspaceMember.find({ workspaceId: existing.workspaceId, userId: { $ne: oid(ctx.userId) } }).select("userId").lean(),
+            LedgerUser.findById(oid(ctx.userId)).select("displayName").lean(),
+          ]);
+          await notifyUsers({
+            userIds: others.map((m) => String(m.userId)),
+            workspaceId: existing.workspaceId.toString(),
+            kind: "goal.contribution",
+            title: `${me?.displayName ?? "Someone"} put ${formatMoney(amountMinor, added.currency)} into ${added.name}`,
+            body: `${added.name} has ${formatMoney(added.currentAmountMinor, added.currency)} of ${formatMoney(added.targetAmountMinor, added.currency)}.`,
+            href: `/w/${existing.workspaceId}/goals`,
+          });
+        }
         // Passing a quarter, half or three quarters of the way is worth a word (reaching it has its own below).
         const crossed = milestonesCrossed(added.targetAmountMinor, added.currentAmountMinor - amountMinor, added.currentAmountMinor).filter((p) => p < 100);
         if (crossed.length) {

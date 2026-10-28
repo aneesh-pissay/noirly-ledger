@@ -352,6 +352,8 @@ export const upsertGoalBodySchema = z.object({
   targetDate: z.string().nullable().optional(),
 });
 
+export const pledgeBodySchema = z.object({ monthlyMajor: amountMajorSchema });
+
 export const contributeGoalBodySchema = z.object({
   amountMajor: amountMajorSchema,
   /** The day it went in, for money added before it was recorded here. */

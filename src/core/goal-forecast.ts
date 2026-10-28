@@ -24,6 +24,14 @@ export type GoalForecast = {
   neededMonthlyMinor: number | null;
   /** Reaching it by the target date at this pace (null without a target date). */
   onTrack: boolean | null;
+  /** Saving together (shared workspaces): who's put in what, the pledges, and when the pledges would get there. */
+  sharing?: {
+    shares: Array<{ userId: string; name: string; amountMinor: number; percent: number }>;
+    pledges: Array<{ userId: string; name: string; monthlyMinor: number; thisMonthMinor: number; met: boolean }>;
+    pledgedMinor: number;
+    pledgedDate: string | null;
+    myPledgeMinor: number;
+  };
 };
 
 function days(a: string, b: string) {
@@ -83,10 +91,16 @@ export function monthlyPace(contributions: Contribution[], today: string) {
   return Math.max(0, Math.round((total / span) * MONTH_DAYS));
 }
 
+/** When the remaining amount is reached going in at `monthlyMinor` a month; null at nothing a month. */
+export function reachedAt(remainingMinor: number, monthlyMinor: number, today: string) {
+  if (remainingMinor <= 0) return today;
+  return monthlyMinor > 0 ? addDays(today, (remainingMinor / monthlyMinor) * MONTH_DAYS) : null;
+}
+
 export function forecastGoal(goal: { targetMinor: number; currentMinor: number; targetDate: string | null }, contributions: Contribution[], today: string): GoalForecast {
   const remaining = Math.max(0, goal.targetMinor - goal.currentMinor);
   const paceMinor = monthlyPace(contributions, today);
-  const projectedDate = remaining === 0 ? today : paceMinor > 0 ? addDays(today, (remaining / paceMinor) * MONTH_DAYS) : null;
+  const projectedDate = reachedAt(remaining, paceMinor, today);
   let neededMonthlyMinor: number | null = null;
   let onTrack: boolean | null = null;
   if (goal.targetDate) {

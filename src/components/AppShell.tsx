@@ -104,6 +104,7 @@ export function AppShell({ user, workspaces, children }: Props) {
         accounts: { href: `${base}/accounts`, label: "Accounts", icon: Landmark },
         budgets: { href: `${base}/budgets`, label: "Budgets", icon: Wallet },
         pools: { href: `${base}/pools`, label: poolsLabel(purpose), icon: FolderKanban },
+        goals: { href: `${base}/goals`, label: "Goals", icon: Goal },
         expenses: { href: `${base}/expenses`, label: "Expenses", icon: ClipboardList },
         approvals: { href: `${base}/approvals`, label: "Approvals", icon: CheckCheck },
       };

@@ -233,7 +233,8 @@ export type NotificationKind =
   | "recurring.due"
   | "bill.reminder"
   | "subscription.price"
-  | "goal.milestone";
+  | "goal.milestone"
+  | "goal.contribution";
 
 export type InAppNotification = {
   id: string;
