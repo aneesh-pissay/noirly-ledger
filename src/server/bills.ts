@@ -10,6 +10,7 @@ import { upcomingRecurring } from "@/src/server/projection";
 import { billStatus, billTotals, isMonth, monthBounds, type BillItem, type BillMarker } from "@/src/core/bills";
 import { settingsOf } from "@/src/server/reminders";
 import { paidEmis, unpaidEmis } from "@/src/server/loans";
+import { cardBills } from "@/src/server/credit-cards";
 
 /**
  * A month of bills: recurring expenses (the ones recorded, and the ones
@@ -139,6 +140,26 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
         accountId: String(plan.payFromAccountId),
         source: "emi",
         status: row.date < today ? "overdue" : row.date === today ? "due" : "upcoming",
+        transactionId: null,
+        ruleId: null,
+        frequency: "monthly",
+      });
+    }
+    // Card bills: what's on the last statement, on its due date.
+    for (const card of await cardBills(ws, today)) {
+      const bill = card.bill;
+      if (!bill || bill.status === "nothing_due" || bill.dueDate < first || bill.dueDate > last) continue;
+      items.push({
+        id: `card:${card.accountId}:${bill.lastStatement}`,
+        date: bill.dueDate,
+        merchant: `${card.name} bill`,
+        note: null,
+        amountMinor: bill.status === "paid" ? bill.statementMinor : bill.leftMinor,
+        currency: card.currency,
+        categoryId: null,
+        accountId: card.accountId,
+        source: "card",
+        status: bill.status === "paid" ? "paid" : bill.status === "overdue" ? "overdue" : bill.dueDate === today ? "due" : "upcoming",
         transactionId: null,
         ruleId: null,
         frequency: "monthly",

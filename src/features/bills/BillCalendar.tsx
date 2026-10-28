@@ -35,7 +35,7 @@ export function BillCalendar({ workspaceId }: Props) {
   const categoryLabels = new Map(categoryTree(categories.data?.categories ?? []).map((c) => [c.id, c.label]));
   const name = (item: BillItem) => item.merchant ?? item.note ?? (item.categoryId ? categoryLabels.get(item.categoryId) : undefined) ?? "Bill";
   const kind = (item: BillItem) =>
-    item.source === "emi" ? "EMI" : item.source === "scheduled" ? "Scheduled" : item.source === "payment" ? (item.frequency ? `To pay, ${item.frequency}` : "To pay") : item.frequency ? `Repeats ${item.frequency}` : "Recurring";
+    item.source === "emi" ? "EMI" : item.source === "card" ? "Card bill" : item.source === "scheduled" ? "Scheduled" : item.source === "payment" ? (item.frequency ? `To pay, ${item.frequency}` : "To pay") : item.frequency ? `Repeats ${item.frequency}` : "Recurring";
 
   const [editing, setEditing] = useState<{ id: string; name: string; settings: ReminderSettings | null } | null>(null);
   const items = bills.data?.items ?? [];

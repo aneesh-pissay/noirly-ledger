@@ -1,7 +1,8 @@
 import { Types } from "mongoose";
 import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
-import { Category, ReminderLog, ScheduledPayment, Transaction as TransactionModel, Workspace } from "@/src/server/models";
+import { Account as AccountModel, Category, ReminderLog, ScheduledPayment, Transaction as TransactionModel, Workspace } from "@/src/server/models";
+import { cardBills } from "@/src/server/credit-cards";
 import type { ScheduledPaymentDocument } from "@/src/server/models/ScheduledPayment";
 import type { TransactionDocument } from "@/src/server/models/Transaction";
 import { requireMembershipRole } from "@/src/server/workspace/members";
@@ -108,6 +109,19 @@ export function runBillReminders(asOf = new Date()): Promise<{ reminders: number
       const overdue = overdueReminder(payment.dueDate, today);
       const reminders = [...remindersFor({ date: payment.dueDate, frequency: null }, null, today), ...(overdue ? [overdue] : [])];
       for (const reminder of reminders) if (await send(payment, String(payment._id), reminder, payment.name, today, links)) sent++;
+    }
+    // Card bills: notice before the due date while something's left, and one note if it's missed.
+    const cardWorkspaces = await AccountModel.distinct("workspaceId", { kind: "credit_card", archivedAt: null, cardTerms: { $ne: null } });
+    for (const workspaceId of cardWorkspaces as Types.ObjectId[]) {
+      const owners = new Map((await AccountModel.find({ workspaceId, kind: "credit_card" }).select("createdById").lean()).map((a) => [String(a._id), a.createdById]));
+      for (const card of await cardBills(workspaceId, today)) {
+        const bill = card.bill;
+        if (!bill || bill.leftMinor === 0) continue;
+        const overdue = bill.status === "overdue" ? overdueReminder(bill.dueDate, today) : null;
+        const reminders = [...remindersFor({ date: bill.dueDate, frequency: null }, null, today), ...(overdue ? [overdue] : [])];
+        const remindable = { workspaceId, createdById: owners.get(card.accountId)!, amountMinor: bill.leftMinor, currency: card.currency };
+        for (const reminder of reminders) if (await send(remindable, `card:${card.accountId}`, reminder, `${card.name} bill`, today, links)) sent++;
+      }
     }
     for (const doc of ahead) {
       for (const reminder of remindersFor({ date: doc.date.toISOString().slice(0, 10), frequency: null }, null, today)) {

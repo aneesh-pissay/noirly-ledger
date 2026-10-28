@@ -27,6 +27,19 @@ const accountSchema = new Schema(
     // The last statement it was reconciled to: the day it ran through and its balance then.
     reconciledThrough: { type: Date, default: null },
     reconciledBalanceMinor: { type: Number, default: null },
+    // Credit cards: when the statement is made up, days to pay it, the limit and the minimum share (see src/core/credit-cards.ts).
+    cardTerms: {
+      type: new Schema(
+        {
+          statementDay: { type: Number, required: true },
+          dueDays: { type: Number, required: true },
+          creditLimitMinor: { type: Number, default: null },
+          minimumPct: { type: Number, required: true },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
     createdById: { type: Schema.Types.ObjectId, ref: "LedgerUser", required: true },
   },
   { timestamps: true },

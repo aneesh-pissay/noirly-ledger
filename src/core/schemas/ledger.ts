@@ -353,6 +353,15 @@ export const upsertGoalBodySchema = z.object({
   targetDate: z.string().nullable().optional(),
 });
 
+export const cardTermsBodySchema = z
+  .object({
+    statementDay: z.number().int().min(1).max(31),
+    dueDays: z.number().int().min(1).max(60),
+    creditLimitMajor: amountMajorSchema.nullable().optional(),
+    minimumPct: z.number().min(0).max(100).optional(),
+  })
+  .nullable();
+
 export const debtSettingsBodySchema = z.object({
   strategy: z.enum(DEBT_STRATEGIES).optional(),
   extraMonthlyMajor: amountMajorSchema.optional(),

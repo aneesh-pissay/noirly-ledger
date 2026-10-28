@@ -51,6 +51,7 @@ import type { FundRepeat, FundSuggestion, SinkingFundView } from "@/src/core/sin
 import type { GoalForecast } from "@/src/core/goal-forecast";
 import type { LoanView } from "@/src/core/loans";
 import type { DebtStrategy, DebtView } from "@/src/core/debts";
+import type { CardTerms, CardView } from "@/src/core/credit-cards";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -385,6 +386,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ amountMajor, ...(date ? { date } : {}) }),
     });
+  },
+  listCards(workspaceId: string) {
+    return request<{ cards: CardView[] }>(`/api/workspaces/${workspaceId}/cards`);
+  },
+  setCardTerms(accountId: string, body: { statementDay: number; dueDays: number; creditLimitMajor?: string | null; minimumPct?: number } | null) {
+    return request<{ terms: CardTerms | null }>(`/api/accounts/${accountId}/card-terms`, { method: "PUT", body: JSON.stringify(body) });
   },
   listDebts(workspaceId: string) {
     return request<{ baseCurrency: string; debts: DebtView[]; strategy: DebtStrategy; extraMonthlyMinor: number; missingRates: string[] }>(`/api/workspaces/${workspaceId}/debts`);

@@ -47,7 +47,7 @@ export function listDebts(userId: string, workspaceId: string): Promise<{ baseCu
       const plan = planFor.get(String(account._id));
       const override = overrides.get(String(account._id));
       const ownRate = plan ? plan.annualRatePct : kind === "credit_card" ? DEFAULT_CARD_RATE_PCT : null;
-      const ownMinimum = plan ? (loanSchedule(plan)[0]?.amountMinor ?? 0) : kind === "credit_card" ? defaultCardMinimum(owed, account.currency) : null;
+      const ownMinimum = plan ? (loanSchedule(plan)[0]?.amountMinor ?? 0) : kind === "credit_card" ? defaultCardMinimum(owed, account.currency, account.cardTerms?.minimumPct ?? undefined) : null;
       const rate = override?.annualRatePct ?? ownRate;
       const minimum = override?.minimumMinor ?? ownMinimum;
       const balance = toBase(owed, account.currency, today);

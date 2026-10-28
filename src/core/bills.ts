@@ -6,7 +6,7 @@ import type { ReminderSettings } from "@/src/core/reminders";
  * of their date), each paid, due or still to come.
  */
 
-export type BillSource = "recurring" | "emi" | "scheduled" | "payment";
+export type BillSource = "recurring" | "emi" | "scheduled" | "payment" | "card";
 
 /**
  * Paid: recorded and its day has come. Due: its day has come but it isn't

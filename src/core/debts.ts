@@ -148,10 +148,10 @@ export function simulatePrepayment(loan: PrepaymentInput, plan: Prepayment): Pre
   };
 }
 
-/** A card's minimum due when none is known: the usual 5% of what's owed, at least ₹200 on a rupee card (2 units in other currencies). */
-export function defaultCardMinimum(balanceMinor: number, currency: string) {
+/** A card's minimum due when none is typed in: its share of what's owed (the usual 5%), at least ₹200 on a rupee card (2 units in other currencies). */
+export function defaultCardMinimum(balanceMinor: number, currency: string, minimumPct = 5) {
   const floor = currency === "INR" ? 20_000 : 200;
-  return Math.min(balanceMinor, Math.max(floor, Math.round(balanceMinor * 0.05)));
+  return Math.min(balanceMinor, Math.max(floor, Math.round((balanceMinor * minimumPct) / 100)));
 }
 
 /** A card's yearly rate when none is known: Indian cards charge about 3.5% a month. */
