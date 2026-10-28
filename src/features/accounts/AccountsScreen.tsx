@@ -15,6 +15,7 @@ import { MoneyText } from "@/src/components/MoneyText";
 import { Select } from "@/src/components/Select";
 import { NetWorthPanel } from "@/src/features/accounts/NetWorthPanel";
 import { ProjectionPanel } from "@/src/features/accounts/ProjectionPanel";
+import { DebtPlanPanel } from "@/src/features/accounts/DebtPlanPanel";
 
 type Props = {
   workspaceId: string;
@@ -153,6 +154,9 @@ export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "
       </p>
       <NetWorthPanel workspaceId={workspaceId} />
       <ProjectionPanel workspaceId={workspaceId} />
+      <div className="mt-6">
+        <DebtPlanPanel workspaceId={workspaceId} />
+      </div>
 
       <form
         className="mt-6 grid gap-3 surface grain rounded-[var(--r-lg)] p-4 sm:grid-cols-2"

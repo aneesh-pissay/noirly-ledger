@@ -13,6 +13,7 @@ import { MAX_BULK, MAX_BULK_CREATE } from "@/src/core/bulk";
 import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
 import { PAYMENT_REPEATS } from "@/src/core/payments";
 import { FUND_REPEATS } from "@/src/core/sinking-funds";
+import { DEBT_STRATEGIES } from "@/src/core/debts";
 import { DATE_FORMATS } from "@/src/core/imports";
 
 export const currencyCode = z
@@ -350,6 +351,18 @@ export const upsertGoalBodySchema = z.object({
   currentMajor: amountMajorSchema.optional(),
   currency: currencyCode.optional(),
   targetDate: z.string().nullable().optional(),
+});
+
+export const debtSettingsBodySchema = z.object({
+  strategy: z.enum(DEBT_STRATEGIES).optional(),
+  extraMonthlyMajor: amountMajorSchema.optional(),
+  debt: z
+    .object({
+      accountId: z.string().min(1).max(64),
+      annualRatePct: z.number().min(0).max(60).nullable().optional(),
+      minimumMajor: amountMajorSchema.nullable().optional(),
+    })
+    .optional(),
 });
 
 export const loanBodySchema = z.object({

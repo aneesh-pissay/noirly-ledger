@@ -10,6 +10,7 @@ import { isoDate } from "@/src/core/budgets/period";
 import { MAX_LOAN_MONTHS, type LoanView } from "@/src/core/loans";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { Select } from "@/src/components/Select";
+import { PrepayWhatIf } from "@/src/features/installments/PrepayWhatIf";
 
 type Props = { workspaceId: string };
 
@@ -27,6 +28,7 @@ export function LoansPanel({ workspaceId }: Props) {
   const payers = open.filter((a) => a.kind !== "loan");
   const [adding, setAdding] = useState(false);
   const [showing, setShowing] = useState<string | null>(null);
+  const [whatIf, setWhatIf] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", loanAccountId: "", payFromAccountId: "", categoryId: "", principal: "", rate: "", months: "", firstDate: "" });
   const refresh = () =>
     Promise.all(
@@ -91,11 +93,17 @@ export function LoansPanel({ workspaceId }: Props) {
           <button type="button" className="text-xs underline" aria-expanded={showing === loan.id} onClick={() => setShowing(showing === loan.id ? null : loan.id)}>
             {showing === loan.id ? "Hide schedule" : "Show schedule"}
           </button>
+          {s.monthsLeft ? (
+            <button type="button" className="text-xs underline" aria-expanded={whatIf === loan.id} onClick={() => setWhatIf(whatIf === loan.id ? null : loan.id)}>
+              What if I prepay?
+            </button>
+          ) : null}
           <span className="flex-1" />
           <button type="button" className="text-xs underline" disabled={remove.isPending} onClick={() => { if (window.confirm(`Remove ${loan.name}'s schedule? EMIs already recorded stay.`)) remove.mutate(loan.id); }}>
             Remove
           </button>
         </div>
+        {whatIf === loan.id ? <PrepayWhatIf loan={loan} /> : null}
         {showing === loan.id ? (
           <div className="max-h-80 overflow-auto rounded-lg border border-[var(--hairline)]">
             <table aria-label={`${loan.name} schedule`} className="w-full text-right text-xs">
