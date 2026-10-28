@@ -352,6 +352,19 @@ export const upsertGoalBodySchema = z.object({
   targetDate: z.string().nullable().optional(),
 });
 
+export const loanBodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  loanAccountId: z.string().min(1).max(64),
+  payFromAccountId: z.string().min(1).max(64),
+  categoryId: z.string().min(1).max(64).nullable().optional(),
+  principalMajor: amountMajorSchema,
+  annualRatePct: z.number().min(0).max(60),
+  months: z.number().int().min(1).max(480),
+  firstDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const recordEmiBodySchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() });
+
 export const pledgeBodySchema = z.object({ monthlyMajor: amountMajorSchema });
 
 export const contributeGoalBodySchema = z.object({

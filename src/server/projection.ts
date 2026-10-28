@@ -7,6 +7,7 @@ import { baseConverter, entriesByAccount } from "@/src/server/net-worth";
 import { balancesOn, type DatedEntry } from "@/src/core/net-worth";
 import { addDays, availableToSpend, projectAccount, unassignedEffect } from "@/src/core/projection";
 import { cashEffect, cashFlow, isCash, type CashEvent } from "@/src/core/cash-flow";
+import { unpaidEmis } from "@/src/server/loans";
 import { dueOccurrences } from "@/src/core/recurrence/next";
 import type { AccountKind } from "@/src/core/accounts";
 import type { RecurrenceFrequency } from "@/src/core/models/enums";
@@ -107,6 +108,18 @@ async function billsToPay(workspaceId: Types.ObjectId, through: string): Promise
   }));
 }
 
+/** Loan EMIs not recorded yet: the principal moving to the loan's account, and the interest going out. */
+async function loanEmis(workspaceId: Types.ObjectId, through: string): Promise<UpcomingItem[]> {
+  return (await unpaidEmis(workspaceId, through)).flatMap(({ plan, row }) => {
+    const label = `${plan.name} · EMI ${row.number}/${plan.months}`;
+    const base = { date: row.date, currency: plan.currency, accountId: String(plan.payFromAccountId), categoryId: plan.categoryId ? String(plan.categoryId) : null, recurring: false, bill: true };
+    return [
+      { ...base, label: `${label} principal`, type: "transfer" as const, amountMinor: row.principalMinor, toAccountId: String(plan.loanAccountId), toAmountMinor: row.principalMinor },
+      ...(row.interestMinor > 0 ? [{ ...base, label: `${label} interest`, type: "expense" as const, amountMinor: row.interestMinor, toAccountId: null, toAmountMinor: null }] : []),
+    ];
+  });
+}
+
 /**
  * Where each open account is heading over the next `days` days from what's
  * already known (future-dated transactions, upcoming recurring ones and
@@ -123,16 +136,17 @@ export function getProjection(userId: string, workspaceId: string, days = 30): P
     const through = addDays(today, days);
 
     const accounts = await AccountModel.find({ workspaceId: workspace._id, archivedAt: null }).sort({ createdAt: 1 }).lean();
-    const [entries, toBase, recurring, dated, bills, categories] = await Promise.all([
+    const [entries, toBase, recurring, dated, bills, emis, categories] = await Promise.all([
       entriesByAccount(accounts.map((a) => a._id)),
       baseConverter(workspace._id, base),
       upcomingRecurring(workspace._id, through),
       scheduled(workspace._id, today, through),
       billsToPay(workspace._id, through),
+      loanEmis(workspace._id, through),
       Category.find({ workspaceId: workspace._id }).select("name").lean(),
     ]);
     const categoryName = new Map(categories.map((c) => [String(c._id), c.name]));
-    const upcoming = [...dated, ...recurring, ...bills]
+    const upcoming = [...dated, ...recurring, ...bills, ...emis]
       .map((item) => ({ ...item, label: item.label || (item.categoryId ? categoryName.get(item.categoryId) ?? "" : "") }))
       .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
 

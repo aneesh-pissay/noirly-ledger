@@ -9,6 +9,7 @@ import { requireMembershipRole } from "@/src/server/workspace/members";
 import { upcomingRecurring } from "@/src/server/projection";
 import { billStatus, billTotals, isMonth, monthBounds, type BillItem, type BillMarker } from "@/src/core/bills";
 import { settingsOf } from "@/src/server/reminders";
+import { paidEmis, unpaidEmis } from "@/src/server/loans";
 
 /**
  * A month of bills: recurring expenses (the ones recorded, and the ones
@@ -105,6 +106,42 @@ export function getBillCalendar(userId: string, workspaceId: string, month: stri
         transactionId: payment.transactionId ? String(payment.transactionId) : null,
         ruleId: null,
         frequency: payment.repeat && payment.repeat !== "none" ? payment.repeat : null,
+      });
+    }
+    // Loan EMIs: recorded ones are paid (as a transfer and interest, so they show here rather than as recorded bills), the rest still to pay.
+    for (const { plan, row, transferId } of await paidEmis(ws, first, last)) {
+      items.push({
+        id: `loan:${plan._id}:${row.number}`,
+        date: row.date,
+        merchant: `${plan.name} · EMI ${row.number}/${plan.months}`,
+        note: null,
+        amountMinor: row.amountMinor,
+        currency: plan.currency,
+        categoryId: plan.categoryId ? String(plan.categoryId) : null,
+        accountId: String(plan.payFromAccountId),
+        source: "emi",
+        status: "paid",
+        transactionId: transferId,
+        ruleId: null,
+        frequency: "monthly",
+      });
+    }
+    for (const { plan, row } of await unpaidEmis(ws, last)) {
+      if (row.date < first) continue;
+      items.push({
+        id: `loan:${plan._id}:${row.number}`,
+        date: row.date,
+        merchant: `${plan.name} · EMI ${row.number}/${plan.months}`,
+        note: null,
+        amountMinor: row.amountMinor,
+        currency: plan.currency,
+        categoryId: plan.categoryId ? String(plan.categoryId) : null,
+        accountId: String(plan.payFromAccountId),
+        source: "emi",
+        status: row.date < today ? "overdue" : row.date === today ? "due" : "upcoming",
+        transactionId: null,
+        ruleId: null,
+        frequency: "monthly",
       });
     }
     const markers: BillMarker[] = [...rules.values()].flatMap((rule) => {

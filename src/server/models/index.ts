@@ -30,6 +30,7 @@ export { ScheduledPayment, type ScheduledPaymentDocument } from "./ScheduledPaym
 export { SubscriptionDismissal, type SubscriptionDismissalDocument } from "./SubscriptionDismissal";
 export { SinkingFund, type SinkingFundDocument } from "./SinkingFund";
 export { GoalContribution, type GoalContributionDocument } from "./GoalContribution";
+export { LoanPlan, type LoanPlanDocument } from "./LoanPlan";
 export {
   TransactionChange,
   TransactionComment,

@@ -22,6 +22,7 @@ import { CashFlowPanel } from "@/src/features/accounts/CashFlowCard";
 import { SpottedSubscriptions } from "@/src/features/bills/SpottedSubscriptions";
 import { SubscriptionInsights } from "@/src/features/bills/SubscriptionInsights";
 import { EmiPanel } from "@/src/features/installments/EmiPanel";
+import { LoansPanel } from "@/src/features/installments/LoansPanel";
 import { TransactionDetails } from "@/src/features/transactions/TransactionDetails";
 import { DuplicatesPanel } from "@/src/features/transactions/DuplicatesPanel";
 import { FiltersBar } from "@/src/features/transactions/FiltersBar";
@@ -193,6 +194,7 @@ export function TransactionScreen({
           <SubscriptionInsights workspaceId={workspaceId} />
           <SpottedSubscriptions workspaceId={workspaceId} />
           <EmiPanel workspaceId={workspaceId} baseCurrency={baseCurrency} />
+          <LoansPanel workspaceId={workspaceId} />
         </div>
       ) : null}
 

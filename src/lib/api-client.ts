@@ -49,6 +49,7 @@ import type { SpottedSubscription } from "@/src/core/subscriptions";
 import type { SubscriptionInsight } from "@/src/core/subscription-insights";
 import type { FundRepeat, FundSuggestion, SinkingFundView } from "@/src/core/sinking-funds";
 import type { GoalForecast } from "@/src/core/goal-forecast";
+import type { LoanView } from "@/src/core/loans";
 import type { gstSummary } from "@/src/core/gst";
 
 type GstSummary = ReturnType<typeof gstSummary>;
@@ -383,6 +384,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ amountMajor, ...(date ? { date } : {}) }),
     });
+  },
+  listLoans(workspaceId: string) {
+    return request<{ loans: LoanView[] }>(`/api/workspaces/${workspaceId}/loans`);
+  },
+  createLoan(
+    workspaceId: string,
+    body: { name: string; loanAccountId: string; payFromAccountId: string; categoryId?: string | null; principalMajor: string; annualRatePct: number; months: number; firstDate: string },
+  ) {
+    return request<{ loan: LoanView }>(`/api/workspaces/${workspaceId}/loans`, { method: "POST", body: JSON.stringify(body) });
+  },
+  recordEmi(loanId: string, date?: string | null) {
+    return request<{ loan: LoanView }>(`/api/loans/${loanId}/emis`, { method: "POST", body: JSON.stringify({ date: date ?? null }) });
+  },
+  undoLastEmi(loanId: string) {
+    return request<{ loan: LoanView }>(`/api/loans/${loanId}/emis`, { method: "DELETE" });
+  },
+  deleteLoan(loanId: string) {
+    return request<{ ok: boolean }>(`/api/loans/${loanId}`, { method: "DELETE" });
   },
   setGoalPledge(goalId: string, monthlyMajor: string) {
     return request<{ monthlyMinor: number }>(`/api/savings-goals/${goalId}/pledge`, { method: "PUT", body: JSON.stringify({ monthlyMajor }) });
