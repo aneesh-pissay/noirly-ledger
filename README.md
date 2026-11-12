@@ -71,7 +71,7 @@ Realtime ([noirly-realtime](../noirly-realtime), port 4001), Noirly Flow, emaile
 
 ## The daily job
 
-Recurring transactions, reminders and everything scheduled run from one endpoint, `POST /api/cron/recurring`, authorized with `Bearer $CRON_SECRET`. Call it once a day (a Vercel cron, or any scheduler). Locally:
+Recurring transactions, reminders and everything scheduled run from one endpoint, `/api/cron/recurring` (GET or POST), authorized with `Bearer $CRON_SECRET`. On Vercel, `vercel.json` schedules it daily at 00:30 UTC (06:00 IST), and Vercel sends the secret itself once `CRON_SECRET` is set in the project's environment variables. Elsewhere, call it once a day from any scheduler. Locally:
 
 ```bash
 pnpm recurring:run
