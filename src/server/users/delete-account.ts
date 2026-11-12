@@ -1,20 +1,18 @@
 import type { Types } from "mongoose";
 import type { MemberRole } from "@/src/core/models/enums";
 import {
-  ApprovalRequest,
-  Budget,
-  BudgetPool,
-  Category,
-  FxRate,
+  NotificationPreference,
+  FlowLink,
+  FlowTask,
+  CalendarFeed,
+  AccessToken,
   LedgerUser,
   Notification,
-  SavingsGoal,
-  Transaction,
   Workspace,
   WorkspaceInvite,
   WorkspaceMember,
 } from "@/src/server/models";
-import { deleteReceipt } from "@/src/server/storage/receipts";
+import { purgeWorkspace } from "@/src/server/workspace/purge";
 
 /**
  * Deletes a person's Ledger data when their Noirly account is deleted.
@@ -31,26 +29,6 @@ import { deleteReceipt } from "@/src/server/storage/receipts";
  */
 
 const SUCCESSION: MemberRole[] = ["owner", "approver", "member"];
-
-async function purgeWorkspace(workspaceId: Types.ObjectId): Promise<void> {
-  const receipts = await Transaction.find({ workspaceId, receiptStorageKey: { $ne: null } })
-    .select("receiptStorageKey")
-    .lean();
-  await Promise.all(receipts.map((t) => (t.receiptStorageKey ? deleteReceipt(t.receiptStorageKey) : undefined)));
-  await Promise.all([
-    Transaction.deleteMany({ workspaceId }),
-    Budget.deleteMany({ workspaceId }),
-    BudgetPool.deleteMany({ workspaceId }),
-    Category.deleteMany({ workspaceId }),
-    FxRate.deleteMany({ workspaceId }),
-    SavingsGoal.deleteMany({ workspaceId }),
-    ApprovalRequest.deleteMany({ workspaceId }),
-    Notification.deleteMany({ workspaceId }),
-    WorkspaceInvite.deleteMany({ workspaceId }),
-    WorkspaceMember.deleteMany({ workspaceId }),
-  ]);
-  await Workspace.deleteOne({ _id: workspaceId });
-}
 
 export type LedgerDeletionSummary = {
   deleted: boolean;
@@ -105,6 +83,11 @@ export async function deleteLedgerAccountData(identitySub: string): Promise<Ledg
   // What is left of them in shared workspaces.
   await Promise.all([
     Notification.deleteMany({ userId }),
+    NotificationPreference.deleteMany({ userId }),
+    FlowLink.find({ userId }).select("_id").lean().then((links) => FlowTask.deleteMany({ linkId: { $in: links.map((l) => l._id) } })),
+    FlowLink.deleteMany({ userId }),
+    CalendarFeed.deleteMany({ userId }),
+    AccessToken.deleteMany({ userId }),
     WorkspaceInvite.deleteMany({ createdById: userId }),
   ]);
   await LedgerUser.deleteOne({ _id: userId });

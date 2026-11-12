@@ -39,6 +39,7 @@ import {
   FxRate as FxRateModel,
   LedgerUser,
   Notification as NotificationModel,
+  Reimbursement as ReimbursementModel,
   SavingsGoal as SavingsGoalModel,
   GoalContribution,
   Transaction as TransactionModel,
@@ -46,9 +47,12 @@ import {
   WorkspaceMember,
 } from "@/src/server/models";
 import {
+  approvalChain,
+  deadlinesOf,
   mapApproval,
   mapBudget,
   mapBudgetPool,
+  poolRulesOf,
   mapCategory,
   mapFxRate,
   mapNotification,
@@ -69,6 +73,10 @@ import { receiptUrlFor, receiptWorkspaceId } from "@/src/server/storage/receipt-
 import { publishMany } from "@/src/server/realtime/publish";
 import { notifyUsers } from "@/src/server/notifications/notify";
 import { maybeNotifyBudgetThreshold } from "@/src/server/notifications/budget-threshold";
+import { maybeNotifyLargeExpense } from "@/src/server/notifications/large-expense";
+import { appendAudit } from "@/src/server/audit";
+import { blindTerm } from "@/src/server/security/field-crypto";
+import { searchTerms } from "@/src/core/sensitive";
 import { assertTransactionAccount, resolveTransfer } from "@/src/server/accounts";
 import { expenseToRefund, refundedByExpense } from "@/src/server/refunds";
 import { spendSign } from "@/src/core/refunds";
@@ -90,6 +98,18 @@ import { defaultFiscalStart } from "@/src/core/locale-format";
 import { assertSplits, refundSplits, storedSplits, type StoredSplit } from "@/src/server/splits";
 import { milestonesCrossed } from "@/src/core/goal-forecast";
 import { formatMoney } from "@/src/core/locale-format";
+import { decideAs, describeStep, startSteps, stepApprovers, stepNotifyIds } from "@/src/core/approval-rules";
+import { chainForExpense, loadDeciders } from "@/src/server/approval-rules";
+import { expenseSummary, loadActiveDelegations, recordApprovalEvent } from "@/src/server/approval-history";
+import { openReimbursement, settleReimbursement } from "@/src/server/reimbursements";
+import { assertPolicies, categoryParents, loadPolicies, violationsOf } from "@/src/server/spending-policies";
+import { assertTransactionDepartment, defaultDepartment, maybeNotifyGroupBudgets } from "@/src/server/departments";
+import { isLate, submissionLateness, waitingDays } from "@/src/core/deadlines";
+import { autoApproves, resolvePoolSteps } from "@/src/core/pool-rules";
+import { missingCategories, templateSetup } from "@/src/core/pool-templates";
+import { countUses, withRules } from "@/src/server/transaction-rules";
+import { fireWorkflows } from "@/src/server/workflows";
+import { memberLimitStatus } from "@/src/server/pool-rules";
 
 type ProviderContext = {
   userId: string;
@@ -162,12 +182,13 @@ function receiptFields(workspaceId: Types.ObjectId, key: string | null | undefin
 }
 
 /**
- * Who may change a transaction: whoever created it, or the workspace owner.
- * (In a personal workspace that's the same person.)
+ * Who may change a transaction: whoever created it, or someone who may
+ * change anyone's (owners, and custom roles given it). In a personal
+ * workspace that's the same person.
  */
 async function requireTransactionEditor(userId: string, doc: { workspaceId: Types.ObjectId; createdById: Types.ObjectId }) {
   const role = await requireMembershipRole(userId, doc.workspaceId.toString());
-  if (doc.createdById.toString() !== userId && !can(role, "workspace.manage")) {
+  if (doc.createdById.toString() !== userId && !can(role, "transaction.manage")) {
     throw new ApiError(403, "forbidden", "You can only change transactions you added");
   }
   return role;
@@ -340,7 +361,12 @@ export function createMongoLedgerProvider(
         };
         const all: object[] = [];
         // A category's transactions include split ones with a line in it.
-        if (query.categoryId) all.push({ $or: [{ categoryId: oid(query.categoryId) }, { "splits.categoryId": oid(query.categoryId) }] });
+        if (query.categoryId) {
+          // A top-level category takes in its subcategories, as its budget does.
+          const children = await CategoryModel.find({ parentId: oid(query.categoryId) }).select("_id").lean();
+          const ids = [oid(query.categoryId), ...children.map((c) => c._id)];
+          all.push({ $or: [{ categoryId: { $in: ids } }, { "splits.categoryId": { $in: ids } }] });
+        }
         if (query.budgetPoolId) filter.budgetPoolId = oid(query.budgetPoolId);
         // An account's transactions include transfers into it.
         if (query.tag) filter.tags = query.tag.toLowerCase().replace(/^#+/, "");
@@ -353,9 +379,11 @@ export function createMongoLedgerProvider(
           const pattern = new RegExp(escapeRegex(search.text), "i");
           const matching = await CategoryModel.find({ workspaceId: oid(query.workspaceId), name: pattern }).select("_id").lean();
           const ids = matching.map((c) => c._id);
+          // Notes are sealed: they're found by the beginnings of their words.
+          const terms = searchTerms(search.text).map(blindTerm);
           all.push({
             $or: [
-              { note: pattern },
+              ...(terms.length ? [{ noteTerms: { $all: terms } }] : []),
               { merchant: pattern },
               { tags: search.text.toLowerCase().replace(/^#+/, "") },
               ...(ids.length ? [{ categoryId: { $in: ids } }, { "splits.categoryId": { $in: ids } }] : []),
@@ -422,9 +450,15 @@ export function createMongoLedgerProvider(
       });
     },
 
-    async createTransaction(input: CreateTransactionInput): Promise<Transaction> {
+    async createTransaction(given: CreateTransactionInput): Promise<Transaction> {
       return withDb(async () => {
-        const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
+        const workspace = await requireWorkspace(ctx.userId, given.workspaceId);
+        // The workspace's rules fill in what it doesn't say: category, merchant, project, tags.
+        const ruled = await withRules(workspace._id, given);
+        const input: CreateTransactionInput = {
+          ...ruled.input,
+          categoryId: ruled.input.categoryId || (ruled.input.splits?.length ? null : given.fallbackCategoryId ?? null),
+        };
         if (input.clearing === "reconciled") {
           throw new ApiError(400, "invalid_request", "Transactions become reconciled when you reconcile their account");
         }
@@ -458,6 +492,8 @@ export function createMongoLedgerProvider(
           merchant: input.merchant !== undefined ? input.merchant : refundOf?.merchant ?? null,
         });
         const projectId = input.projectId ?? refundOf?.projectId?.toString() ?? null;
+        const departmentId = input.departmentId ?? refundOf?.departmentId?.toString() ?? null;
+        await assertTransactionDepartment(workspace._id, departmentId, refundOf?.departmentId?.toString() ?? null);
         const upi = await upiFields(workspace._id, { upiRef: input.upiRef ?? null, upiId: input.upiId ?? null });
         // A refund carries its expense's GST, worked out on the refunded amount.
         const gst = gstFields(input.type, input.amountMinor, input.gst !== undefined ? input.gst : gstSettingsOf(refundOf?.gst));
@@ -494,6 +530,7 @@ export function createMongoLedgerProvider(
           ...upi,
           gst,
           projectId: optionalOid(projectId),
+          departmentId: optionalOid(departmentId),
           date: asOf,
           note: input.note ?? null,
           ...receipt,
@@ -511,8 +548,12 @@ export function createMongoLedgerProvider(
               addedExpenseMinor: line.baseAmountMinor,
             });
           }
+          await maybeNotifyGroupBudgets({ workspaceId: workspace._id, departmentId: doc.departmentId ?? null, projectId: doc.projectId ?? null, addedMinor: baseAmountMinor });
+          await maybeNotifyLargeExpense({ workspaceId: workspace._id, createdById: ctx.userId, baseAmountMinor, label: doc.merchant ?? doc.note ?? "an expense" });
         }
         await recordChange({ workspaceId: workspace._id, transactionId: doc._id, actorId: ctx.userId, action: "created" });
+        await countUses(ruled.ruleIds);
+        await fireWorkflows({ workspaceId: workspace._id, trigger: "transaction.added", transactionId: doc._id });
         return mapTransaction(doc);
       });
     },
@@ -610,6 +651,10 @@ export function createMongoLedgerProvider(
           await assertTransactionProject(workspace._id, patch.projectId, doc.projectId?.toString() ?? null);
           doc.projectId = optionalOid(patch.projectId);
         }
+        if (patch.departmentId !== undefined) {
+          await assertTransactionDepartment(workspace._id, patch.departmentId, doc.departmentId?.toString() ?? null);
+          doc.departmentId = optionalOid(patch.departmentId);
+        }
         if (patch.receiptStorageKey !== undefined) {
           const receipt = receiptFields(workspace._id, patch.receiptStorageKey);
           doc.receiptStorageKey = receipt.receiptStorageKey;
@@ -694,12 +739,18 @@ export function createMongoLedgerProvider(
               { _id: doc.budgetPoolId },
               { $inc: { currentSpendMinor: -doc.baseAmountMinor } },
             );
+            // Not yet paid back: nothing is owed for an expense that's gone.
+            await ReimbursementModel.updateOne({ transactionId: doc._id, status: "owed" }, { $set: { status: "void" } });
           } else if (approval?.status === "submitted") {
             // Withdrawn before review: it leaves the approvers' inbox.
-            await ApprovalModel.updateOne(
+            const withdrawn = await ApprovalModel.updateOne(
               { _id: approval._id, status: "submitted" },
               { $set: { status: "cancelled", reviewedAt: new Date() } },
             );
+            if (withdrawn.modifiedCount) {
+              await settleReimbursement(approval._id, "withdrawn");
+              await recordApprovalEvent({ workspaceId: doc.workspaceId, kind: "withdrawn", approvalId: approval._id, actorId: ctx.userId, summary: expenseSummary(doc) });
+            }
           }
         }
       });
@@ -823,6 +874,18 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const workspace = await requireWorkspace(ctx.userId, input.workspaceId);
         await requireAction(ctx.userId, input.workspaceId, "pool.manage");
+        if (input.periodStart && input.periodEnd && input.periodEnd < input.periodStart) {
+          throw new ApiError(400, "invalid_request", "The pool ends before it starts");
+        }
+        // A template starts the pool with its rules and shares, and adds the categories it needs.
+        let preset: ReturnType<typeof templateSetup> | null = null;
+        if (input.template) {
+          const memberIds = (await WorkspaceMember.find({ workspaceId: workspace._id }).select("userId").lean()).map((m) => String(m.userId));
+          preset = templateSetup(input.template, input.limitAmountMinor, memberIds);
+          const names = (await CategoryModel.find({ workspaceId: workspace._id, deletedAt: null }).select("name").lean()).map((c) => c.name);
+          const missing = missingCategories(input.template, names);
+          if (missing.length) await CategoryModel.insertMany(missing.map((c) => ({ ...c, workspaceId: workspace._id })));
+        }
         const doc = await BudgetPoolModel.create({
           workspaceId: workspace._id,
           name: input.name.trim(),
@@ -832,6 +895,15 @@ export function createMongoLedgerProvider(
           currentSpendMinor: 0,
           periodStart: input.periodStart ? new Date(input.periodStart) : null,
           periodEnd: input.periodEnd ? new Date(input.periodEnd) : null,
+          template: input.template ?? null,
+          ...(preset
+            ? {
+                ...preset.rules,
+                allocationMode: preset.allocation.mode,
+                allocationTargetMinor: preset.allocation.targetMinor,
+                allocationShares: preset.allocation.shares.map((s) => ({ userId: oid(s.userId), value: s.value })),
+              }
+            : {}),
         });
         return mapBudgetPool(doc);
       });
@@ -880,6 +952,15 @@ export function createMongoLedgerProvider(
         if (!added) throw new ApiError(404, "not_found", "Goal not found");
         // Logged with its day: the goal's pace and milestones come from these.
         await GoalContribution.create({ workspaceId: existing.workspaceId, goalId: existing._id, amountMinor, date: date ?? today, createdById: oid(ctx.userId) });
+        await appendAudit({
+          workspaceId: existing.workspaceId,
+          actorId: ctx.userId,
+          action: amountMinor >= 0 ? "goal.contribution" : "goal.withdrawal",
+          entity: "goal",
+          entityId: existing._id,
+          summary: `${amountMinor >= 0 ? "Put" : "Took"} ${formatMoney(Math.abs(amountMinor), added.currency)} ${amountMinor >= 0 ? "into" : "out of"} ${added.name} (now ${formatMoney(added.currentAmountMinor, added.currency)})`,
+          data: { amountMinor, date: date ?? today, balanceMinor: added.currentAmountMinor },
+        });
         // Saving together: the others hear when someone puts money in.
         const workspace = await WorkspaceModel.findById(existing.workspaceId).select("kind").lean();
         if (workspace && workspace.kind !== "personal" && amountMinor > 0) {
@@ -949,40 +1030,66 @@ export function createMongoLedgerProvider(
       status?: ApprovalStatus[];
     }): Promise<ApprovalView[]> {
       return withDb(async () => {
-        const membership = await requireMembership(ctx.userId, query.workspaceId);
-        const isDecider = can(await grantFor(membership), "expense.decide");
-        const otherDecider = isDecider
-          ? Boolean(await WorkspaceMember.exists({
-              workspaceId: oid(query.workspaceId),
-              userId: { $ne: oid(ctx.userId) },
-              role: { $in: ["owner", "approver"] },
-            }))
-          : false;
-        const filter: Record<string, unknown> = {
-          workspaceId: oid(query.workspaceId),
-        };
+        await requireMembership(ctx.userId, query.workspaceId);
+        const ws = oid(query.workspaceId);
+        const [deciders, delegations, policies, workspace] = await Promise.all([
+          loadDeciders(ws),
+          loadActiveDelegations(ws),
+          loadPolicies(ws),
+          WorkspaceModel.findById(ws).select("baseCurrency approvalDeadlines").lean(),
+        ]);
+        const deadlines = deadlinesOf(workspace?.approvalDeadlines);
+        const now = new Date();
+        const filter: Record<string, unknown> = { workspaceId: ws };
         if (query.status?.length) filter.status = { $in: query.status };
         const docs = await ApprovalModel.find(filter).sort({ createdAt: -1 }).limit(100);
         const txns = await TransactionModel.find({
           _id: { $in: docs.map((d) => d.transactionId) },
         });
-        const users = await LedgerUser.find({
-          _id: { $in: docs.map((d) => d.submittedById) },
-        });
+        const parents = policies.length ? await categoryParents(txns.map((t) => (t.categoryId ? String(t.categoryId) : null))) : new Map<string, string>();
+        // Flags are worked out from the expense as it is now: a receipt added later clears that one.
+        const violationsFor = (t: (typeof txns)[number]) =>
+          policies.length
+            ? violationsOf(policies, {
+                baseAmountMinor: t.baseAmountMinor,
+                categoryId: t.categoryId ? String(t.categoryId) : null,
+                categoryParentId: t.categoryId ? parents.get(String(t.categoryId)) ?? null : null,
+                merchantKey: t.merchantKey ?? null,
+                budgetPoolId: t.budgetPoolId ? String(t.budgetPoolId) : "",
+                hasReceipt: Boolean(t.receiptStorageKey) || (t.attachments?.length ?? 0) > 0,
+              }, workspace?.baseCurrency ?? "USD")
+            : [];
+        const approvals = docs.map(mapApproval);
+        const userIds = new Set(
+          [...approvals.flatMap((a) => [a.submittedById, ...a.steps.flatMap((s) => [...s.userIds, s.decidedById ?? "", s.onBehalfOfId ?? ""])]), ...delegations.map((d) => d.fromUserId)].filter(Boolean),
+        );
+        const users = await LedgerUser.find({ _id: { $in: [...userIds].map(oid) } });
         const txnById = new Map(txns.map((t) => [t._id.toString(), t]));
-        const userById = new Map(users.map((u) => [u._id.toString(), u]));
-        return docs.flatMap((doc) => {
-          const txn = txnById.get(doc.transactionId.toString());
+        const nameOf = (id: string) => users.find((u) => u._id.toString() === id)?.displayName;
+        return approvals.flatMap((approval) => {
+          const txn = txnById.get(approval.transactionId);
           if (!txn) return [];
-          const user = userById.get(doc.submittedById.toString());
+          // The same rule decideApproval applies, so the inbox never offers
+          // a button the server will refuse.
+          const as = approval.status === "submitted" ? decideAs(ctx.userId, approval, deciders, delegations) : null;
           return [
             {
-              ...mapApproval(doc),
+              ...approval,
               transaction: mapTransaction(txn),
-              submitterName: user?.displayName ?? "Unknown",
-              // Mirrors decideApproval's rule, so the inbox never offers a
-              // button the server will refuse.
-              canDecide: isDecider && (doc.submittedById.toString() !== ctx.userId || !otherDecider),
+              submitterName: nameOf(approval.submittedById) ?? "Unknown",
+              canDecide: as !== null,
+              actingForName: as?.onBehalfOfId ? nameOf(as.onBehalfOfId) ?? "Unknown" : null,
+              violations: violationsFor(txn),
+              ...(() => {
+                const since = approval.status === "submitted" ? approval.steps[approval.currentStep]?.startedAt : null;
+                return since ? { waitingDays: waitingDays(since, now), late: isLate(since, now, deadlines) } : { waitingDays: null, late: false };
+              })(),
+              stepLabels: approval.steps.map((s) => ({
+                label: describeStep(s, nameOf),
+                decidedByName: s.decidedById
+                  ? `${nameOf(s.decidedById) ?? "Unknown"}${s.onBehalfOfId ? ` for ${nameOf(s.onBehalfOfId) ?? "Unknown"}` : ""}`
+                  : null,
+              })),
             },
           ];
         });
@@ -1012,6 +1119,29 @@ export function createMongoLedgerProvider(
           baseCurrency: workspace.baseCurrency,
           asOf,
         });
+        const labels = labelFields({ merchant: input.merchant ?? null });
+        // Past the workspace's submission deadline: refused, or flagged for approvers.
+        const lateness = submissionLateness(input.date, isoDate(new Date()), deadlinesOf(workspace.approvalDeadlines));
+        if (lateness && deadlinesOf(workspace.approvalDeadlines).lateSubmission === "block") {
+          throw new ApiError(400, "submission_late", `Expenses from ${input.date} had to be submitted by ${lateness.deadline}`);
+        }
+        await assertTransactionProject(workspace._id, input.projectId ?? null);
+        // Left out, it goes to the submitter's own team or department; null means none.
+        const departmentId = input.departmentId !== undefined ? input.departmentId : await defaultDepartment(workspace._id, ctx.userId);
+        await assertTransactionDepartment(workspace._id, departmentId);
+        // A policy that blocks this spend stops it here; ones that only flag show to approvers.
+        const flags = await assertPolicies(workspace._id, workspace.baseCurrency, {
+          baseAmountMinor,
+          categoryId: input.categoryId ?? null,
+          merchantKey: labels.merchantKey ?? null,
+          budgetPoolId: pool._id.toString(),
+          hasReceipt: Boolean(receipt.receiptStorageKey),
+        });
+        // A member can't put more through the pool than their limit, waiting expenses included.
+        const limit = await memberLimitStatus(pool, ctx.userId, input.date, baseAmountMinor);
+        if (limit?.over) {
+          throw new ApiError(400, "member_limit", `That's over your ${formatMoney(limit.limitMinor, workspace.baseCurrency)} limit in ${pool.name} by ${formatMoney(limit.overByMinor, workspace.baseCurrency)}`);
+        }
         const txn = await TransactionModel.create({
           workspaceId: workspace._id,
           type: "expense",
@@ -1022,33 +1152,95 @@ export function createMongoLedgerProvider(
           budgetPoolId: pool._id,
           date: asOf,
           note: input.note ?? null,
+          ...labels,
+          projectId: optionalOid(input.projectId ?? null),
+          departmentId: optionalOid(departmentId),
           ...receipt,
           createdById: oid(ctx.userId),
           isPosted: false,
         });
+        const chain = await chainForExpense(workspace._id, {
+          baseAmountMinor,
+          categoryId: input.categoryId ?? null,
+          budgetPoolId: pool._id.toString(),
+        });
+        const poolRules = poolRulesOf(pool);
+        // With no workspace rule, the pool's own approvers decide; a rule's "pool" step becomes them too.
+        const chainSteps = resolvePoolSteps(chain.steps, chain.rule !== null, poolRules.approverIds);
+        // Small, unflagged and covered by no workspace rule: the pool approves it on its own.
+        const auto = autoApproves(poolRules, { baseAmountMinor, ruleMatched: chain.rule !== null, flagged: flags.length > 0 || Boolean(lateness) });
+        const now = new Date();
+        const steps = startSteps(chainSteps, now.toISOString()).map((s) => ({
+          ...s,
+          userIds: s.userIds.map(oid),
+          ...(auto ? { decision: "approved" as const, decidedAt: now.toISOString(), note: "Approved on its own" } : {}),
+        }));
         const approval = await ApprovalModel.create({
           workspaceId: workspace._id,
           transactionId: txn._id,
           budgetPoolId: pool._id,
           submittedById: oid(ctx.userId),
-          status: "submitted",
-          submittedAt: new Date(),
+          status: auto ? "approved" : "submitted",
+          submittedAt: now,
+          ...(auto ? { reviewedAt: now, reviewNote: "Approved on its own" } : {}),
+          steps,
+          currentStep: 0,
+          ruleName: chain.rule?.name ?? null,
+          lateSubmission: lateness,
         });
         txn.approvalRequestId = approval._id;
+        if (auto) txn.isPosted = true;
         await txn.save();
+        if (input.reimburse) {
+          await openReimbursement({ workspaceId: workspace._id, transactionId: txn._id, approvalId: approval._id, claimantId: ctx.userId, amountMinor: baseAmountMinor, currency: workspace.baseCurrency });
+          if (auto) await settleReimbursement(approval._id, "approved");
+        }
 
-        const approvers = await WorkspaceMember.find({
+        await recordApprovalEvent({
           workspaceId: workspace._id,
-          role: { $in: ["owner", "approver"] },
+          kind: "submitted",
+          approvalId: approval._id,
+          actorId: ctx.userId,
+          stepCount: chainSteps.length,
+          note: chain.rule ? `Rule: ${chain.rule.name}` : null,
+          summary: expenseSummary(txn),
         });
+
+        if (auto) {
+          await recordApprovalEvent({
+            workspaceId: workspace._id,
+            kind: "approved",
+            approvalId: approval._id,
+            actorId: null,
+            note: `Approved on its own: ${pool.name} approves up to ${formatMoney(poolRules.autoApproveUpToMinor!, workspace.baseCurrency)}`,
+            summary: expenseSummary(txn),
+          });
+          const fresh = await BudgetPoolModel.findOneAndUpdate({ _id: pool._id }, { $inc: { currentSpendMinor: baseAmountMinor } }, { returnDocument: "after" });
+          await maybeNotifyBudgetThreshold({ workspaceId: workspace._id.toString(), categoryId: input.categoryId ?? null, addedExpenseMinor: baseAmountMinor });
+          await maybeNotifyGroupBudgets({ workspaceId: workspace._id, departmentId: txn.departmentId ?? null, projectId: txn.projectId ?? null, addedMinor: baseAmountMinor });
+          // Approved on its own, so nobody was asked: tell those watching for big ones.
+          await maybeNotifyLargeExpense({ workspaceId: workspace._id, createdById: ctx.userId, baseAmountMinor, label: txn.merchant ?? txn.note ?? "an expense" });
+          const mappedPool = mapBudgetPool(fresh ?? pool);
+          const wsId = workspace._id.toString();
+          const payload = { approval: mapApproval(approval), transaction: mapTransaction(txn), pool: mappedPool, poolId: pool._id.toString(), version: Date.parse(approval.updatedAt.toISOString()) };
+          await publishMany([
+            { channel: `workspace:${wsId}:budgetpool:${pool._id.toString()}`, event: "expense.approved", data: payload },
+            { channel: `workspace:${wsId}:approvals`, event: "expense.approved", data: payload },
+            { channel: `workspace:${wsId}:budgetpool:${pool._id.toString()}`, event: "budget.updated", data: { pool: mappedPool, version: Date.parse(mappedPool.updatedAt) } },
+          ]);
+          await fireWorkflows({ workspaceId: workspace._id, trigger: "expense.submitted", transactionId: txn._id });
+          await fireWorkflows({ workspaceId: workspace._id, trigger: "expense.approved", transactionId: txn._id });
+          return { transaction: mapTransaction(txn), approval: mapApproval(approval) };
+        }
+        const mapped = mapApproval(approval);
         await notifyUsers({
-          userIds: approvers
-            .map((m) => m.userId.toString())
-            .filter((id) => id !== ctx.userId),
+          userIds: stepNotifyIds(mapped, await loadDeciders(workspace._id), await loadActiveDelegations(workspace._id)),
           workspaceId: workspace._id.toString(),
           kind: "approval.requested",
           title: "Expense submitted",
-          body: `An expense needs review in ${pool.name}`,
+          body: chainSteps.length > 1
+            ? `An expense in ${pool.name} needs ${chainSteps.length} approvals; yours is first`
+            : `An expense needs review in ${pool.name}`,
           href: `/w/${workspace._id.toString()}/approvals`,
         });
 
@@ -1070,6 +1262,7 @@ export function createMongoLedgerProvider(
             data: payload,
           },
         ]);
+        await fireWorkflows({ workspaceId: workspace._id, trigger: "expense.submitted", transactionId: txn._id });
 
         return { transaction: mapTransaction(txn), approval: mapApproval(approval) };
       });
@@ -1083,38 +1276,64 @@ export function createMongoLedgerProvider(
       return withDb(async () => {
         const existing = await ApprovalModel.findById(input.approvalId);
         if (!existing) throw new ApiError(404, "not_found", "Approval not found");
-        await requireAction(ctx.userId, existing.workspaceId.toString(), "expense.decide");
-
-        // Nobody reviews their own expense, unless nobody else in the
-        // workspace can (a team of one).
-        if (existing.submittedById.toString() === ctx.userId) {
-          const otherDecider = await WorkspaceMember.exists({
-            workspaceId: existing.workspaceId,
-            userId: { $ne: oid(ctx.userId) },
-            role: { $in: ["owner", "approver"] },
-          });
-          if (otherDecider) {
-            throw new ApiError(403, "forbidden", "Someone else has to review your own expense");
-          }
+        await requireMembership(ctx.userId, existing.workspaceId.toString());
+        if (existing.status !== "submitted") {
+          throw new ApiError(409, "conflict", "This expense was already decided");
         }
 
-        const pending = await TransactionModel.exists({ _id: existing.transactionId, deletedAt: null });
+        // Who decides the current step comes from the chain it was
+        // submitted with, plus anyone standing in for one of them while
+        // they're away. Nobody decides their own expense or two steps of
+        // one, unless nobody else the step allows could.
+        const [deciders, delegations] = await Promise.all([loadDeciders(existing.workspaceId), loadActiveDelegations(existing.workspaceId)]);
+        const { steps, currentStep } = approvalChain(existing);
+        const request = { submittedById: existing.submittedById.toString(), steps, currentStep };
+        const as = decideAs(ctx.userId, request, deciders, delegations);
+        if (!as) {
+          if (!stepApprovers(steps[currentStep]!, deciders).includes(ctx.userId)) {
+            throw new ApiError(403, "forbidden", "Insufficient permissions");
+          }
+          throw new ApiError(403, "forbidden", request.submittedById === ctx.userId
+            ? "Someone else has to review your own expense"
+            : "Someone else has to approve this step");
+        }
+
+        const pending = await TransactionModel.findOne({ _id: existing.transactionId, deletedAt: null });
         if (!pending) {
           await ApprovalModel.updateOne(
             { _id: existing._id, status: "submitted" },
             { $set: { status: "cancelled", reviewedAt: new Date() } },
           );
+          await settleReimbursement(existing._id, "withdrawn");
           throw new ApiError(409, "conflict", "This expense was withdrawn");
         }
 
+        const now = new Date();
+        // A rejection at any step ends it; an approval ends it only at the last step.
+        const final = input.decision === "rejected" || currentStep === steps.length - 1;
+        const decided = steps.map((s, i) => ({
+          ...s,
+          userIds: s.userIds.map(oid),
+          decidedById: i === currentStep ? oid(ctx.userId) : s.decidedById ? oid(s.decidedById) : null,
+          onBehalfOfId: i === currentStep ? (as.onBehalfOfId ? oid(as.onBehalfOfId) : null) : s.onBehalfOfId ? oid(s.onBehalfOfId) : null,
+          decidedAt: i === currentStep ? now : s.decidedAt ? new Date(s.decidedAt) : null,
+          decision: i === currentStep ? input.decision : s.decision,
+          note: i === currentStep ? input.reviewNote ?? null : s.note,
+          // The next step starts waiting now.
+          startedAt: !final && i === currentStep + 1 ? now : s.startedAt ? new Date(s.startedAt) : null,
+          remindedAt: s.remindedAt ? new Date(s.remindedAt) : null,
+          escalatedAt: s.escalatedAt ? new Date(s.escalatedAt) : null,
+        }));
         const approval = await ApprovalModel.findOneAndUpdate(
-          { _id: existing._id, status: "submitted" },
+          // Matching the step too, so two people deciding at once can't both land.
+          { _id: existing._id, status: "submitted", currentStep: currentStep === 0 ? { $in: [0, null] } : currentStep },
           {
             $set: {
-              status: input.decision,
-              reviewedById: oid(ctx.userId),
-              reviewNote: input.reviewNote ?? null,
-              reviewedAt: new Date(),
+              steps: decided,
+              currentStep: final ? currentStep : currentStep + 1,
+              ...(final
+                ? { status: input.decision, reviewedById: oid(ctx.userId), reviewNote: input.reviewNote ?? null, reviewedAt: now }
+                : {}),
             },
           },
           { returnDocument: "after" },
@@ -1122,15 +1341,60 @@ export function createMongoLedgerProvider(
         if (!approval) {
           throw new ApiError(409, "conflict", "This expense was already decided");
         }
+        await recordApprovalEvent({
+          workspaceId: approval.workspaceId,
+          kind: input.decision,
+          approvalId: approval._id,
+          actorId: ctx.userId,
+          otherUserId: as.onBehalfOfId,
+          step: currentStep,
+          stepCount: steps.length,
+          note: input.reviewNote ?? null,
+          summary: expenseSummary(pending),
+        });
+
+        if (!final) {
+          const pool = await BudgetPoolModel.findById(approval.budgetPoolId);
+          if (!pool) throw new ApiError(404, "not_found", "Budget pool not found");
+          const txn = await TransactionModel.findById(approval.transactionId);
+          const mapped = mapApproval(approval);
+          const wsId = approval.workspaceId.toString();
+          await notifyUsers({
+            userIds: stepNotifyIds(mapped, deciders, delegations),
+            workspaceId: wsId,
+            kind: "approval.requested",
+            title: "Expense waiting on you",
+            body: `Step ${mapped.currentStep + 1} of ${mapped.steps.length}: an expense in ${pool.name} needs your approval`,
+            href: `/w/${wsId}/approvals`,
+          });
+          await notifyUsers({
+            userIds: [approval.submittedById.toString()],
+            workspaceId: wsId,
+            kind: "approval.decided",
+            title: `Step ${currentStep + 1} of ${steps.length} approved`,
+            body: input.reviewNote || "Your expense moves on to its next approver",
+            href: `/w/${wsId}/expenses`,
+          });
+          await publishMany([
+            {
+              channel: `workspace:${wsId}:approvals`,
+              event: "expense.advanced",
+              data: { approval: mapped, poolId: pool._id.toString(), version: Date.parse(approval.updatedAt.toISOString()) },
+            },
+          ]);
+          return { approval: mapped, transaction: mapTransaction(txn!), pool: mapBudgetPool(pool) };
+        }
 
         const txn = await TransactionModel.findOne({ _id: approval.transactionId, deletedAt: null });
         if (!txn) {
           // Withdrawn in the moment between the check above and this decision.
           await ApprovalModel.updateOne({ _id: approval._id }, { $set: { status: "cancelled" } });
+          await settleReimbursement(approval._id, "withdrawn");
           throw new ApiError(409, "conflict", "This expense was withdrawn");
         }
         const pool = await BudgetPoolModel.findById(approval.budgetPoolId);
         if (!pool) throw new ApiError(404, "not_found", "Budget pool not found");
+        await settleReimbursement(approval._id, input.decision);
 
         if (input.decision === "approved") {
           txn.isPosted = true;
@@ -1149,6 +1413,7 @@ export function createMongoLedgerProvider(
             categoryId: txn.categoryId ? txn.categoryId.toString() : null,
             addedExpenseMinor: txn.baseAmountMinor,
           });
+          await maybeNotifyGroupBudgets({ workspaceId: approval.workspaceId, departmentId: txn.departmentId ?? null, projectId: txn.projectId ?? null, addedMinor: txn.baseAmountMinor });
         }
 
         await notifyUsers({
@@ -1188,6 +1453,7 @@ export function createMongoLedgerProvider(
             data: { pool: mappedPool, version: Date.parse(pool.updatedAt.toISOString()) },
           },
         ]);
+        await fireWorkflows({ workspaceId: approval.workspaceId, trigger: event, transactionId: txn._id });
 
         return {
           approval: mapApproval(approval),
@@ -1248,6 +1514,8 @@ export function createMongoLedgerProvider(
             $set: {
               rateToBaseScaled: input.rateToBaseScaled,
               createdById: oid(ctx.userId),
+              // Set by hand: a fetched rate for the same day gives way to it.
+              source: "user",
             },
             $setOnInsert: {
               workspaceId: oid(input.workspaceId),

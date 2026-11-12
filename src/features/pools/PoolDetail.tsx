@@ -8,13 +8,17 @@ import { qk } from "@/src/core/sync/query-keys";
 import { BudgetPoolRealtime } from "@/src/features/realtime/BudgetPoolRealtime";
 import { PoolMeter } from "@/src/features/pools/PoolMeter";
 import { MoneyText } from "@/src/components/MoneyText";
+import { PoolRulesPanel } from "@/src/features/pools/PoolRulesPanel";
+import { PoolContributions } from "@/src/features/pools/PoolContributions";
 
 type Props = {
   workspaceId: string;
   poolId: string;
+  currentUserId: string;
+  baseCurrency: string;
 };
 
-export function PoolDetail({ workspaceId, poolId }: Props) {
+export function PoolDetail({ workspaceId, poolId, currentUserId, baseCurrency }: Props) {
   const poolQuery = useQuery({
     queryKey: qk.budgetPool(poolId),
     queryFn: () => api.getPool(poolId),
@@ -47,6 +51,9 @@ export function PoolDetail({ workspaceId, poolId }: Props) {
           <PoolMeter pool={pool} />
         </div>
       ) : null}
+      {/* Keyed by the rules, so its form starts from what's saved (and live spend updates don't reset it). */}
+      {pool ? <PoolContributions workspaceId={workspaceId} poolId={poolId} currentUserId={currentUserId} baseCurrency={baseCurrency} /> : null}
+      {pool ? <PoolRulesPanel key={JSON.stringify(pool.rules)} workspaceId={workspaceId} pool={pool} currentUserId={currentUserId} baseCurrency={baseCurrency} /> : null}
 
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-sm font-medium">Expenses</h2>

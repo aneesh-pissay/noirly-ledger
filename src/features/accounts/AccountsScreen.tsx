@@ -23,10 +23,12 @@ type Props = {
   baseCurrency: string;
   /** The workspace's transaction list, for each account's link. */
   transactionsPath?: string;
+  /** The workspace's reconciliation report. */
+  reconciliationPath?: string;
 };
 
 /** /accounts — where your money is kept or owed, with each one's balance. */
-export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "/transactions" }: Props) {
+export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "/transactions", reconciliationPath = "/accounts/reconciliation" }: Props) {
   const queryClient = useQueryClient();
   const { amount } = useMoneyFormat();
   const accounts = useQuery({ queryKey: qk.accounts(workspaceId), queryFn: () => api.listAccounts(workspaceId) });
@@ -36,15 +38,19 @@ export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "
   const [opening, setOpening] = useState("");
   const [openingDate, setOpeningDate] = useState(isoDate(new Date()));
   const [institution, setInstitution] = useState("");
+  const [number, setNumber] = useState("");
+  // Numbers shown whole, by account, until the page is left.
+  const [shown, setShown] = useState<Record<string, string>>({});
+  const hide = (id: string) => setShown((s) => Object.fromEntries(Object.entries(s).filter(([key]) => key !== id)));
   const [error, setError] = useState<string | null>(null);
   const refresh = () => void queryClient.invalidateQueries({ queryKey: qk.accounts(workspaceId) });
 
   const create = useMutation({
     mutationFn: () => api.createAccount(workspaceId, {
-      name: name.trim(), kind, currency, openingMajor: opening.trim() || "0", openingDate, institution: institution.trim() || null,
+      name: name.trim(), kind, currency, openingMajor: opening.trim() || "0", openingDate, institution: institution.trim() || null, number: number.trim() || null,
     }),
     onMutate: () => setError(null),
-    onSuccess: () => { setName(""); setOpening(""); setInstitution(""); refresh(); },
+    onSuccess: () => { setName(""); setOpening(""); setInstitution(""); setNumber(""); refresh(); },
     onError: (err: Error) => setError(err.message),
   });
   const change = useMutation({
@@ -90,6 +96,15 @@ export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "
           </Link>
           {account.scheduledCount ? ` · ${account.scheduledCount} scheduled` : ""}
         </p>
+        {account.numberMasked ? (
+          <p className="font-mono text-xs text-[var(--muted-foreground)]" data-account-number>
+            {shown[account.id] ?? account.numberMasked}{" "}
+            <button type="button" className="font-sans underline" onClick={() => {
+              if (shown[account.id]) hide(account.id);
+              else change.mutate(async () => { const { number: whole } = await api.revealAccountNumber(account.id); setShown((s) => ({ ...s, [account.id]: whole })); });
+            }}>{shown[account.id] ? "Hide" : "Show"}</button>
+          </p>
+        ) : null}
       </div>
       <div className="text-right">
         <MoneyText amountMinor={account.balanceMinor} currency={account.currency}
@@ -115,6 +130,15 @@ export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "
         <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" disabled={change.isPending}
           onClick={() => change.mutate(() => api.updateAccount(account.id, { archived: !account.archived }))}>
           {account.archived ? "Reopen" : "Archive"}
+        </button>
+        <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" disabled={change.isPending}
+          onClick={() => {
+            const next = window.prompt(`${account.name}: account or card number (leave empty to remove it)`, "");
+            if (next === null) return;
+            hide(account.id);
+            change.mutate(() => api.updateAccount(account.id, { number: next.trim() || null }));
+          }}>
+          {account.numberMasked ? "Change number" : "Add number"}
         </button>
         {account.transactionCount === 0 ? (
           <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--balance-negative)]" disabled={change.isPending}
@@ -153,6 +177,9 @@ export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "
       <p className="mt-1 text-sm text-[var(--muted-foreground)]">
         Pick an account when you add a transaction and its balance follows. Each account keeps its own currency.
       </p>
+      <Link href={reconciliationPath} className="mt-2 inline-block text-xs underline text-[var(--muted-foreground)] hover:text-[var(--foreground)]">
+        Reconciliation report
+      </Link>
       <NetWorthPanel workspaceId={workspaceId} />
       <ProjectionPanel workspaceId={workspaceId} />
       <div className="mt-6">
@@ -194,6 +221,11 @@ export function AccountsScreen({ workspaceId, baseCurrency, transactionsPath = "
         <div>
           <Label htmlFor="a-inst">Bank or provider (optional)</Label>
           <Input id="a-inst" value={institution} onChange={(e) => setInstitution(e.target.value)} maxLength={80} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label htmlFor="a-number">Account or card number (optional)</Label>
+          <Input id="a-number" className="font-mono" autoComplete="off" value={number} onChange={(e) => setNumber(e.target.value)} maxLength={50} />
+          <p className="mt-1 text-xs text-[var(--muted-foreground)]">Kept encrypted and shown as its last four; showing it whole is recorded in the audit history.</p>
         </div>
         {error && !reconciling ? <p role="alert" className="text-sm text-[var(--balance-negative)] sm:col-span-2">{error}</p> : null}
         <div className="sm:col-span-2">

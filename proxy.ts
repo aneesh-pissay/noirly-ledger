@@ -2,6 +2,7 @@ import { safeLocalPath } from "@/src/lib/safe-path";
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { consumeRateLimit } from "@/src/server/security/rate-limit";
+import { scopeAllows, tokenScope } from "@/src/core/access-tokens";
 
 /** Requests that prove themselves another way: a Bearer token, or a signed webhook. */
 function selfAuthenticated(request: NextRequest) {
@@ -38,6 +39,12 @@ export const proxy = auth(async (request) => {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/api/") && !pathname.startsWith("/api/auth/")) {
+    // A read-only access token is turned away from writes before anything looks it up.
+    const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get("authorization") ?? "")?.[1];
+    const scope = bearer ? tokenScope(bearer) : null;
+    if (scope && !scopeAllows(scope, request.method)) {
+      return NextResponse.json({ error: "read_only_token", message: "This token can only read" }, { status: 403 });
+    }
     if (!selfAuthenticated(request)) {
       const rejection = csrfRejection(request);
       if (rejection) return rejection;
@@ -59,7 +66,8 @@ export const proxy = auth(async (request) => {
   }
   const isLanding = pathname === "/";
   // Readable without an account (Google Play links to the privacy policy).
-  const isPublicPage = pathname === "/privacy";
+  // The Docs are public too, linked from the landing page.
+  const isPublicPage = pathname === "/privacy" || pathname === "/docs" || pathname.startsWith("/docs/");
   const isLogin = pathname === "/login";
   const isLoginPopup =
     pathname === "/login/popup" || pathname === "/login/popup-complete";

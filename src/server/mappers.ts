@@ -3,6 +3,10 @@ import type { GstSupply, GstTreatment } from "@/src/core/gst";
 import { defaultFiscalStart } from "@/src/core/locale-format";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { RolloverMode } from "@/src/core/budgets/rollover";
+import type { ApprovalStepDecision, ApprovalStepState, ApproverKind } from "@/src/core/approval-rules";
+import { NO_DEADLINES, type DeadlineSettings } from "@/src/core/deadlines";
+import type { PoolRules } from "@/src/core/pool-rules";
+import type { PoolTemplate } from "@/src/core/pool-templates";
 import type {
   ApprovalRequest,
   Budget,
@@ -38,6 +42,19 @@ function isoDay(value: Date | string | null | undefined): string | null {
   return full ? full.slice(0, 10) : null;
 }
 
+/** A workspace's deadline settings as kept, or none set. */
+export function deadlinesOf(stored: Partial<Record<keyof DeadlineSettings, unknown>> | null | undefined): DeadlineSettings {
+  if (!stored) return NO_DEADLINES;
+  const n = (v: unknown) => (typeof v === "number" ? v : null);
+  return {
+    submitWithinDays: n(stored.submitWithinDays),
+    monthCloseDay: n(stored.monthCloseDay),
+    lateSubmission: stored.lateSubmission === "block" ? "block" : "flag",
+    remindAfterDays: n(stored.remindAfterDays),
+    escalateAfterDays: n(stored.escalateAfterDays),
+  };
+}
+
 export function mapWorkspace(doc: WorkspaceDocument): Workspace {
   return {
     id: doc._id.toString(),
@@ -48,6 +65,8 @@ export function mapWorkspace(doc: WorkspaceDocument): Workspace {
     ownerUserId: doc.ownerUserId.toString(),
     baseCurrency: doc.baseCurrency,
     fiscalYearStartMonth: doc.fiscalYearStartMonth ?? defaultFiscalStart(doc.baseCurrency),
+    approvalDeadlines: deadlinesOf(doc.approvalDeadlines),
+    autoFxRates: Boolean(doc.autoFxRates),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
   };
@@ -118,6 +137,7 @@ export function mapTransaction(doc: TransactionDocument): Transaction {
     tags: doc.tags ?? [],
     merchant: doc.merchant ?? null,
     projectId: doc.projectId ? doc.projectId.toString() : null,
+    departmentId: doc.departmentId ? doc.departmentId.toString() : null,
     splits: (doc.splits ?? []).map((line) => ({
       categoryId: line.categoryId ? line.categoryId.toString() : null,
       amountMinor: line.amountMinor,
@@ -181,8 +201,21 @@ export function mapBudgetPool(doc: BudgetPoolDocument): BudgetPool {
     periodStart: isoDay(doc.periodStart),
     periodEnd: isoDay(doc.periodEnd),
     archivedAt: iso(doc.archivedAt),
+    rules: poolRulesOf(doc),
+    template: (doc.template as PoolTemplate | null | undefined) ?? null,
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
+  };
+}
+
+/** A pool's own approval rules and member limits as kept. */
+export function poolRulesOf(doc: Pick<BudgetPoolDocument, "approverIds" | "autoApproveUpToMinor" | "memberLimitMinor" | "memberLimits" | "memberLimitPeriod">): PoolRules {
+  return {
+    approverIds: (doc.approverIds ?? []).map(String),
+    autoApproveUpToMinor: doc.autoApproveUpToMinor ?? null,
+    memberLimitMinor: doc.memberLimitMinor ?? null,
+    memberLimits: (doc.memberLimits ?? []).map((l) => ({ userId: String(l.userId), limitMinor: l.limitMinor })),
+    memberLimitPeriod: doc.memberLimitPeriod === "pool" ? "pool" : "monthly",
   };
 }
 
@@ -213,8 +246,54 @@ export function mapApproval(doc: ApprovalRequestDocument): ApprovalRequest {
     reviewNote: doc.reviewNote ?? null,
     submittedAt: iso(doc.submittedAt),
     reviewedAt: iso(doc.reviewedAt),
+    ...approvalChain(doc),
+    ruleName: doc.ruleName ?? null,
+    lateSubmission: doc.lateSubmission?.deadline ? { deadline: doc.lateSubmission.deadline, daysLate: doc.lateSubmission.daysLate ?? 0 } : null,
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,
+  };
+}
+
+/**
+ * A request's steps as they stand. One from before multi-level approvals
+ * has none stored: it reads as one step any approver decides, its review
+ * (if any) as that step's decision.
+ */
+export function approvalChain(doc: ApprovalRequestDocument): { steps: ApprovalStepState[]; currentStep: number } {
+  // A first step saved without a start time started when the expense was submitted.
+  const submitted = iso(doc.submittedAt) ?? iso(doc.createdAt);
+  if (doc.steps?.length) {
+    return {
+      steps: doc.steps.map((s, i) => ({
+        kind: s.kind as ApproverKind,
+        userIds: (s.userIds ?? []).map(String),
+        decision: (s.decision as ApprovalStepDecision | null) ?? null,
+        decidedById: s.decidedById ? String(s.decidedById) : null,
+        onBehalfOfId: s.onBehalfOfId ? String(s.onBehalfOfId) : null,
+        decidedAt: iso(s.decidedAt),
+        note: s.note ?? null,
+        startedAt: iso(s.startedAt) ?? (i === 0 ? submitted : null),
+        remindedAt: iso(s.remindedAt),
+        escalatedAt: iso(s.escalatedAt),
+      })),
+      currentStep: doc.currentStep ?? 0,
+    };
+  }
+  const decided = doc.status === "approved" || doc.status === "rejected";
+  return {
+    steps: [{
+      kind: "any",
+      userIds: [],
+      decision: decided ? doc.status as ApprovalStepDecision : null,
+      decidedById: decided && doc.reviewedById ? String(doc.reviewedById) : null,
+      onBehalfOfId: null,
+      decidedAt: decided ? iso(doc.reviewedAt) : null,
+      note: decided ? doc.reviewNote ?? null : null,
+      startedAt: submitted,
+      remindedAt: null,
+      escalatedAt: null,
+    }],
+    currentStep: 0,
   };
 }
 
@@ -225,6 +304,7 @@ export function mapFxRate(doc: FxRateDocument): FxRate {
     currency: doc.currency,
     rateToBaseScaled: doc.rateToBaseScaled,
     effectiveFrom: isoDay(doc.effectiveFrom)!,
+    source: doc.source === "auto" ? "auto" : "user",
     createdById: doc.createdById.toString(),
     createdAt: iso(doc.createdAt)!,
     updatedAt: iso(doc.updatedAt)!,

@@ -77,6 +77,8 @@ test.describe("GST on transactions", () => {
     await expect(dialog).toBeHidden();
 
     await page.goto("/reports");
+    // The GST summary sits with the exports.
+    await page.getByRole("tab", { name: "Export" }).click();
     const card = page.locator("[data-gst-currency]");
     await expect(card).toContainText("5%");
     await expect(card).toContainText("5.00 USD");

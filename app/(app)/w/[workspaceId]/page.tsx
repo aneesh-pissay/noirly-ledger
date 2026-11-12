@@ -4,6 +4,7 @@ import { getLedgerProvider } from "@/src/server/api/http";
 import { can } from "@/src/core/permissions/can";
 import { PoolListPreview } from "@/src/features/pools/PoolListPreview";
 import { PurposeSetting } from "@/src/features/workspace/PurposeSetting";
+import { WidgetDashboard } from "@/src/features/dashboard/WidgetDashboard";
 import { hasSection, poolsLabel, PURPOSE_DESCRIPTION, PURPOSE_LABEL, type WorkspacePurpose } from "@/src/core/workspace-purpose";
 
 export default async function WorkspaceHomePage({
@@ -51,6 +52,15 @@ export default async function WorkspaceHomePage({
             <p className="text-sm font-medium text-[var(--foreground)]">{card.label}</p>
           </Link>
         ))}
+      </div>
+
+      <div className="mt-10">
+        <WidgetDashboard
+          workspaceId={workspaceId}
+          baseCurrency={workspace.baseCurrency}
+          fiscalYearStartMonth={workspace.fiscalYearStartMonth}
+          transactionsHref={hasSection(purpose, "transactions") ? `${base}/transactions` : null}
+        />
       </div>
 
       <PoolListPreview workspaceId={workspaceId} />

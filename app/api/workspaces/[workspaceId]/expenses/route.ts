@@ -40,6 +40,10 @@ export async function POST(
       note: body.note ?? null,
       receiptUrl: body.receiptUrl ?? null,
       receiptStorageKey: body.receiptStorageKey ?? null,
+      reimburse: body.reimburse ?? false,
+      merchant: body.merchant ?? null,
+      projectId: body.projectId ?? null,
+      departmentId: body.departmentId,
     });
     return jsonOk(result, 201);
   } catch (error) {

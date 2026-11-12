@@ -17,6 +17,9 @@ const projectSchema = new Schema(
     name: { type: String, required: true, trim: true, maxlength: 80 },
     color: { type: String, required: true, trim: true, default: "#C9A227" },
     archivedAt: { type: Date, default: null },
+    /** A budget for the project's whole life, in base currency; see src/core/group-budgets.ts. */
+    budgetMinor: { type: Number, default: null },
+    alertPct: { type: Number, default: 80 },
     createdById: { type: Schema.Types.ObjectId, ref: "LedgerUser", required: true },
   },
   { timestamps: true },

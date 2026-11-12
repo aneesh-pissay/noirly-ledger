@@ -57,7 +57,14 @@ function map(doc: ProjectDocument, total?: Totals): Project {
     spentMinor: total?.spentMinor ?? 0,
     incomeMinor: total?.incomeMinor ?? 0,
     transactionCount: total?.count ?? 0,
+    budgetMinor: doc.budgetMinor ?? null,
+    alertPct: doc.alertPct ?? 80,
   };
+}
+
+/** A project's spending so far, net of refunds, in base currency. */
+export async function projectSpent(projectId: Types.ObjectId) {
+  return (await totals([projectId])).get(String(projectId))?.spentMinor ?? 0;
 }
 
 /** The workspace's projects with their totals, open ones first. Anyone in it can see them. */
@@ -94,11 +101,13 @@ async function requireProject(userId: string, projectId: string) {
   return doc;
 }
 
-export function updateProject(userId: string, projectId: string, patch: { name?: string; color?: string; archived?: boolean }) {
+export function updateProject(userId: string, projectId: string, patch: { name?: string; color?: string; archived?: boolean; budgetMinor?: number | null; alertPct?: number }) {
   return withDb(async () => {
     const doc = await requireProject(userId, projectId);
     if (patch.name !== undefined) doc.name = patch.name.trim();
     if (patch.color !== undefined) doc.color = patch.color;
+    if (patch.budgetMinor !== undefined) doc.budgetMinor = patch.budgetMinor;
+    if (patch.alertPct !== undefined) doc.alertPct = patch.alertPct;
     if (patch.archived !== undefined) doc.archivedAt = patch.archived ? doc.archivedAt ?? new Date() : null;
     await doc.save();
     return map(doc.toObject(), (await totals([doc._id])).get(String(doc._id)));

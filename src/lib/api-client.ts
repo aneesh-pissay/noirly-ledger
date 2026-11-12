@@ -19,6 +19,7 @@ import type {
   MerchantSummary,
   Projection,
   ApprovalRequest,
+  ApprovalRuleView,
   ApprovalView,
   Budget,
   BudgetPool,
@@ -55,8 +56,89 @@ import type { DebtStrategy, DebtView } from "@/src/core/debts";
 import type { CardTerms, CardView } from "@/src/core/credit-cards";
 import type { PermissionAction } from "@/src/core/permissions/can";
 import type { gstSummary } from "@/src/core/gst";
+import type { ApprovalStepSpec } from "@/src/core/approval-rules";
+import type { ApprovalEventView, DelegationView } from "@/src/core/delegations";
+import type { PayoutMethod, PayoutView, ReimbursementView } from "@/src/core/reimbursements";
+import type { PolicyEnforcement, PolicyViolation, SpendingPolicyView } from "@/src/core/spending-policies";
+import type { DepartmentView, GroupPeriod } from "@/src/core/group-budgets";
+import type { DeadlineSettings } from "@/src/core/deadlines";
+import type { MemberLimitPeriod } from "@/src/core/pool-rules";
+import type { AllocationMode, PoolFunding } from "@/src/core/pool-contributions";
+import type { Granularity } from "@/src/core/reports/periods";
+import type { CashFlowReport, IncomeExpenseReport } from "@/src/core/reports/cash-flow-report";
+import type { SpendingAnalysis } from "@/src/core/reports/spending";
+import type { BudgetComparison, budgetSummary } from "@/src/core/reports/budget-vs-actual";
+import type { Trends } from "@/src/core/reports/trends";
+import type { DebtProgress, NetWorthReport } from "@/src/core/reports/net-worth-report";
+import type { Widget } from "@/src/core/dashboard-widgets";
+import type { CategoryVariance, SavingsAnalysis, Unusual } from "@/src/core/reports/insights";
+import type { RuleView, TextField, TextOp } from "@/src/core/auto-rules";
+import type { WorkflowBody, WorkflowView } from "@/src/core/workflows";
+import type { AutomationBody, AutomationView } from "@/src/core/automations";
+import type { NotificationPrefs } from "@/src/core/notification-prefs";
+import type { FlowLinkSettings, FlowLinkView } from "@/src/core/flow-sync";
+import type { FeedSettings, FeedStatus } from "@/src/core/calendar-feed";
+import type { InboundView } from "@/src/core/inbound-email";
+import type { AccessTokenView, TokenScope } from "@/src/core/access-tokens";
+import type { AuditEntryView, ChainCheck } from "@/src/core/audit";
+import type { BackupFrequency, BackupSettings, BackupView, RestoreResult } from "@/src/core/backup";
+import type { ReconReport } from "@/src/core/reconciliation";
+import type { RetentionPolicy } from "@/src/core/retention";
+import type { PendingActionView } from "@/src/core/dual-control";
+
+type PendingActionsState = { enabled: boolean; available: boolean; owners: number; isOwner: boolean; actions: PendingActionView[] };
+import type { DeliveryView, WebhookEventType, WebhookView } from "@/src/core/webhooks";
+
+/** A rule for incoming transactions as sent: amounts in major units, null for open. */
+export type TransactionRuleBody = {
+  name: string;
+  field: TextField;
+  op: TextOp;
+  value: string;
+  type: "expense" | "income" | null;
+  accountId: string | null;
+  minMajor: string | null;
+  maxMajor: string | null;
+  set: { categoryId: string | null; merchant: string | null; tags: string[]; projectId: string | null };
+};
+import type { ExportFormat, ScheduledExportBody, ScheduledExportView } from "@/src/core/export-schedules";
+
+/** A report's range and periods. */
+export type ReportRange = { from: string; to: string; granularity: Granularity };
+
+/** A department or team as sent: its budget per period in major units of the base currency, null for none. */
+export type DepartmentBody = {
+  name: string;
+  parentId: string | null;
+  budgetMajor: string | null;
+  period: GroupPeriod;
+  alertPct: number;
+  memberIds: string[];
+};
+
+/** A spending policy as sent: amounts in major units of the base currency, null for none. */
+export type SpendingPolicyBody = {
+  name: string;
+  categoryIds: string[];
+  merchants: string[];
+  budgetPoolIds: string[];
+  maxMajor: string | null;
+  receiptOverMajor: string | null;
+  disallowed: boolean;
+  enforcement: PolicyEnforcement;
+};
 
 type GstSummary = ReturnType<typeof gstSummary>;
+
+/** An approval rule as sent: amounts in major units of the base currency, null for open. */
+export type ApprovalRuleBody = {
+  name: string;
+  minMajor: string | null;
+  maxMajor: string | null;
+  categoryIds: string[];
+  budgetPoolIds: string[];
+  steps: ApprovalStepSpec[];
+};
 
 type ApiErrorBody = { error?: string; message?: string };
 
@@ -94,7 +176,7 @@ export const api = {
   updateMe(body: { numberFormat: NumberFormat }) {
     return request<{ numberFormat: NumberFormat }>("/api/me", { method: "PATCH", body: JSON.stringify(body) });
   },
-  updateWorkspaceSettings(workspaceId: string, body: { fiscalYearStartMonth?: number; purpose?: WorkspacePurpose }) {
+  updateWorkspaceSettings(workspaceId: string, body: { fiscalYearStartMonth?: number; purpose?: WorkspacePurpose; approvalDeadlines?: DeadlineSettings; autoFxRates?: boolean }) {
     return request<{ workspace: Workspace }>(`/api/workspaces/${workspaceId}/settings`, { method: "PATCH", body: JSON.stringify(body) });
   },
   createWorkspace(input: { name: string; baseCurrency?: string; purpose?: WorkspacePurpose }) {
@@ -321,10 +403,13 @@ export const api = {
   listAccounts(workspaceId: string) {
     return request<{ accounts: Account[] }>(`/api/workspaces/${workspaceId}/accounts`);
   },
-  createAccount(workspaceId: string, body: { name: string; kind: Account["kind"]; currency: string; openingMajor: string; openingDate: string; institution?: string | null }) {
+  createAccount(workspaceId: string, body: { name: string; kind: Account["kind"]; currency: string; openingMajor: string; openingDate: string; institution?: string | null; number?: string | null }) {
     return request<{ account: Account }>(`/api/workspaces/${workspaceId}/accounts`, { method: "POST", body: JSON.stringify(body) });
   },
-  updateAccount(accountId: string, body: { name?: string; archived?: boolean; openingMajor?: string; institution?: string | null }) {
+  revealAccountNumber(accountId: string) {
+    return request<{ number: string }>(`/api/accounts/${accountId}/number`, { method: "POST" });
+  },
+  updateAccount(accountId: string, body: { name?: string; archived?: boolean; openingMajor?: string; institution?: string | null; number?: string | null }) {
     return request<{ account: Account }>(`/api/accounts/${accountId}`, { method: "PATCH", body: JSON.stringify(body) });
   },
   listProjects(workspaceId: string) {
@@ -333,7 +418,7 @@ export const api = {
   createProject(workspaceId: string, body: { name: string; color?: string }) {
     return request<{ project: Project }>(`/api/workspaces/${workspaceId}/projects`, { method: "POST", body: JSON.stringify(body) });
   },
-  updateProject(projectId: string, body: { name?: string; color?: string; archived?: boolean }) {
+  updateProject(projectId: string, body: { name?: string; color?: string; archived?: boolean; budgetMajor?: string | null; alertPct?: number }) {
     return request<{ project: Project }>(`/api/projects/${projectId}`, { method: "PATCH", body: JSON.stringify(body) });
   },
   deleteProject(projectId: string) {
@@ -437,6 +522,9 @@ export const api = {
     return request<{ rates: FxRate[] }>(
       `/api/workspaces/${workspaceId}/fx-rates`,
     );
+  },
+  refreshFxRates(workspaceId: string) {
+    return request<{ date: string | null; kept: number; currencies: string[] }>(`/api/workspaces/${workspaceId}/fx-rates/refresh`, { method: "POST" });
   },
   upsertFxRate(workspaceId: string, body: Record<string, unknown>) {
     return request<{ rate: FxRate }>(`/api/workspaces/${workspaceId}/fx-rates`, {
@@ -589,6 +677,317 @@ export const api = {
       `/api/workspaces/${workspaceId}/approvals${qs}`,
     );
   },
+  listApprovalRules(workspaceId: string) {
+    return request<{ rules: ApprovalRuleView[] }>(`/api/workspaces/${workspaceId}/approval-rules`);
+  },
+  createApprovalRule(workspaceId: string, body: ApprovalRuleBody) {
+    return request<{ rule: ApprovalRuleView }>(`/api/workspaces/${workspaceId}/approval-rules`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateApprovalRule(workspaceId: string, ruleId: string, body: ApprovalRuleBody) {
+    return request<{ rule: ApprovalRuleView }>(`/api/workspaces/${workspaceId}/approval-rules/${ruleId}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteApprovalRule(workspaceId: string, ruleId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/approval-rules/${ruleId}`, { method: "DELETE" });
+  },
+  reorderApprovalRules(workspaceId: string, ids: string[]) {
+    return request<{ rules: ApprovalRuleView[] }>(`/api/workspaces/${workspaceId}/approval-rules`, { method: "PUT", body: JSON.stringify({ ids }) });
+  },
+  listDelegations(workspaceId: string) {
+    return request<{ delegations: DelegationView[] }>(`/api/workspaces/${workspaceId}/delegations`);
+  },
+  createDelegation(workspaceId: string, body: { toUserId: string; startsOn: string; endsOn: string; note?: string | null }) {
+    return request<{ delegation: { id: string } }>(`/api/workspaces/${workspaceId}/delegations`, { method: "POST", body: JSON.stringify(body) });
+  },
+  endDelegation(workspaceId: string, delegationId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/delegations/${delegationId}`, { method: "DELETE" });
+  },
+  approvalHistory(workspaceId: string, query: { approvalId?: string; before?: string } = {}) {
+    const qs = new URLSearchParams(Object.entries(query).filter((e): e is [string, string] => Boolean(e[1]))).toString();
+    return request<{ events: ApprovalEventView[]; nextBefore: string | null }>(`/api/workspaces/${workspaceId}/approval-history${qs ? `?${qs}` : ""}`);
+  },
+  incomeExpenseReport(workspaceId: string, query: ReportRange) {
+    return request<IncomeExpenseReport & { baseCurrency: string; granularity: Granularity }>(`/api/workspaces/${workspaceId}/reports/income-expense?${new URLSearchParams(query)}`);
+  },
+  cashFlowReport(workspaceId: string, query: ReportRange) {
+    return request<CashFlowReport & { baseCurrency: string; granularity: Granularity; hasCashAccounts: boolean }>(`/api/workspaces/${workspaceId}/reports/cash-flow?${new URLSearchParams(query)}`);
+  },
+  spendingReport(workspaceId: string, query: ReportRange) {
+    return request<SpendingAnalysis & { baseCurrency: string; granularity: Granularity; previous: { from: string; to: string } }>(`/api/workspaces/${workspaceId}/reports/spending?${new URLSearchParams(query)}`);
+  },
+  budgetVsActualReport(workspaceId: string, query: ReportRange) {
+    return request<{ baseCurrency: string; budgets: BudgetComparison[]; summary: ReturnType<typeof budgetSummary> }>(`/api/workspaces/${workspaceId}/reports/budgets?${new URLSearchParams(query)}`);
+  },
+  trendsReport(workspaceId: string, query: ReportRange) {
+    return request<Trends & { baseCurrency: string; granularity: Granularity }>(`/api/workspaces/${workspaceId}/reports/trends?${new URLSearchParams(query)}`);
+  },
+  netWorthReport(workspaceId: string, query: ReportRange) {
+    return request<
+      | { baseCurrency: string; granularity: Granularity; hasAccounts: false }
+      | {
+          baseCurrency: string;
+          granularity: Granularity;
+          hasAccounts: true;
+          netWorth: NetWorthReport;
+          debt: DebtProgress;
+          plan: { strategy: DebtStrategy; months: number | null; debtFreeMonth: string | null; totalInterestMinor: number; leftOut: number } | null;
+        }
+    >(`/api/workspaces/${workspaceId}/reports/net-worth?${new URLSearchParams(query)}`);
+  },
+  listWorkflows(workspaceId: string) {
+    return request<{ workflows: WorkflowView[] }>(`/api/workspaces/${workspaceId}/workflows`);
+  },
+  createWorkflow(workspaceId: string, body: WorkflowBody) {
+    return request<{ workflow: WorkflowView }>(`/api/workspaces/${workspaceId}/workflows`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateWorkflow(workspaceId: string, id: string, body: WorkflowBody) {
+    return request<{ workflow: WorkflowView }>(`/api/workspaces/${workspaceId}/workflows/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteWorkflow(workspaceId: string, id: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/workflows/${id}`, { method: "DELETE" });
+  },
+  listPendingActions(workspaceId: string) {
+    return request<PendingActionsState>(`/api/workspaces/${workspaceId}/pending-actions`);
+  },
+  setDualControl(workspaceId: string, enabled: boolean) {
+    return request<PendingActionsState>(`/api/workspaces/${workspaceId}/pending-actions`, { method: "PUT", body: JSON.stringify({ enabled }) });
+  },
+  decidePendingAction(actionId: string, decision: "approve" | "reject") {
+    return request<{ status: string; result: string | null }>(`/api/pending-actions/${actionId}`, { method: "POST", body: JSON.stringify({ decision }) });
+  },
+  cancelPendingAction(actionId: string) {
+    return request<{ ok: boolean }>(`/api/pending-actions/${actionId}`, { method: "DELETE" });
+  },
+  getRetention(workspaceId: string) {
+    return request<{ policy: RetentionPolicy; lastRunAt: string | null; kind: "personal" | "team"; name: string }>(`/api/workspaces/${workspaceId}/retention`);
+  },
+  setRetention(workspaceId: string, body: RetentionPolicy) {
+    return request<{ policy: RetentionPolicy; lastRunAt: string | null; kind: "personal" | "team"; name: string }>(`/api/workspaces/${workspaceId}/retention`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  applyRetention(workspaceId: string) {
+    return request<{ removed: { deletedTransactions: number; unmatchedReceipts: number; notifications: number } }>(`/api/workspaces/${workspaceId}/retention/run`, { method: "POST" });
+  },
+  deleteWorkspace(workspaceId: string, confirmName: string) {
+    return request<{ deleted: boolean }>(`/api/workspaces/${workspaceId}`, { method: "DELETE", body: JSON.stringify({ confirmName }) });
+  },
+  getBackups(workspaceId: string) {
+    return request<BackupSettings>(`/api/workspaces/${workspaceId}/backups`);
+  },
+  setBackupSchedule(workspaceId: string, body: { enabled: boolean; frequency: BackupFrequency }) {
+    return request<BackupSettings>(`/api/workspaces/${workspaceId}/backups`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  backUpNow(workspaceId: string) {
+    return request<{ backup: BackupView }>(`/api/workspaces/${workspaceId}/backups/run`, { method: "POST" });
+  },
+  restoreBackup(workspaceId: string, backupId: string) {
+    return request<{ restored: RestoreResult }>(`/api/workspaces/${workspaceId}/backups/${backupId}/restore`, { method: "POST" });
+  },
+  restoreUpload(file: Blob) {
+    return request<{ restored: RestoreResult }>("/api/workspaces/restore", { method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } });
+  },
+  reconciliationReport(workspaceId: string) {
+    return request<ReconReport>(`/api/workspaces/${workspaceId}/reconciliation`);
+  },
+  listAudit(workspaceId: string, query: Record<string, string>) {
+    return request<{ entries: AuditEntryView[]; nextBefore: number | null; actors: Array<{ id: string; name: string }> }>(`/api/workspaces/${workspaceId}/audit?${new URLSearchParams(query)}`);
+  },
+  verifyAudit(workspaceId: string) {
+    return request<ChainCheck & { checkedAt: string }>(`/api/workspaces/${workspaceId}/audit/verify`);
+  },
+  listAccessTokens() {
+    return request<{ tokens: AccessTokenView[] }>("/api/me/access-tokens");
+  },
+  createAccessToken(body: { name: string; scope: TokenScope; days: number }) {
+    return request<{ token: string; accessToken: AccessTokenView }>("/api/me/access-tokens", { method: "POST", body: JSON.stringify(body) });
+  },
+  revokeAccessToken(id: string) {
+    return request<{ ok: boolean }>(`/api/me/access-tokens/${id}`, { method: "DELETE" });
+  },
+  listWebhooks(workspaceId: string) {
+    return request<{ webhooks: WebhookView[] }>(`/api/workspaces/${workspaceId}/webhooks`);
+  },
+  createWebhook(workspaceId: string, body: { url: string; events: WebhookEventType[] }) {
+    return request<{ webhook: WebhookView; secret: string }>(`/api/workspaces/${workspaceId}/webhooks`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateWebhook(id: string, body: { url?: string; events?: WebhookEventType[]; enabled?: boolean }) {
+    return request<{ webhook: WebhookView }>(`/api/webhooks/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteWebhook(id: string) {
+    return request<{ ok: boolean }>(`/api/webhooks/${id}`, { method: "DELETE" });
+  },
+  rotateWebhookSecret(id: string) {
+    return request<{ secret: string }>(`/api/webhooks/${id}/secret`, { method: "POST" });
+  },
+  testWebhook(id: string) {
+    return request<{ delivery: DeliveryView }>(`/api/webhooks/${id}/test`, { method: "POST" });
+  },
+  listWebhookDeliveries(id: string) {
+    return request<{ deliveries: DeliveryView[] }>(`/api/webhooks/${id}/deliveries`);
+  },
+  redeliverWebhook(id: string, deliveryId: string) {
+    return request<{ delivery: DeliveryView }>(`/api/webhooks/${id}/deliveries/${deliveryId}/redeliver`, { method: "POST" });
+  },
+  getInboundEmail(workspaceId: string) {
+    return request<InboundView>(`/api/workspaces/${workspaceId}/inbound-email`);
+  },
+  rotateInboundEmail(workspaceId: string) {
+    return request<InboundView>(`/api/workspaces/${workspaceId}/inbound-email`, { method: "POST" });
+  },
+  setInboundEmail(workspaceId: string, body: { enabled: boolean; makeBills: boolean }) {
+    return request<InboundView>(`/api/workspaces/${workspaceId}/inbound-email`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteInboundEmail(workspaceId: string) {
+    return request<InboundView>(`/api/workspaces/${workspaceId}/inbound-email`, { method: "DELETE" });
+  },
+  calendarFeed() {
+    return request<FeedStatus>("/api/me/calendar-feed");
+  },
+  createCalendarFeed() {
+    return request<{ url: string; createdAt: string }>("/api/me/calendar-feed", { method: "POST" });
+  },
+  updateCalendarFeed(body: FeedSettings) {
+    return request<FeedStatus>("/api/me/calendar-feed", { method: "PUT", body: JSON.stringify(body) });
+  },
+  disableCalendarFeed() {
+    return request<FeedStatus>("/api/me/calendar-feed", { method: "DELETE" });
+  },
+  getFlowLink(workspaceId: string) {
+    return request<{ configured: boolean; flowUrl: string | null; link: FlowLinkView | null }>(`/api/workspaces/${workspaceId}/flow`);
+  },
+  lookUpFlow(workspaceId: string, body: { token?: string | null; flowWorkspaceId?: string | null }) {
+    return request<{ workspaces: Array<{ id: string; name: string }>; projects: Array<{ id: string; name: string }> }>(`/api/workspaces/${workspaceId}/flow/lookup`, { method: "POST", body: JSON.stringify(body) });
+  },
+  saveFlowLink(workspaceId: string, body: FlowLinkSettings & { token?: string | null; flowWorkspaceId: string; flowProjectId: string | null; paused?: boolean }) {
+    return request<{ link: FlowLinkView }>(`/api/workspaces/${workspaceId}/flow`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteFlowLink(workspaceId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/flow`, { method: "DELETE" });
+  },
+  syncFlow(workspaceId: string) {
+    return request<{ link: FlowLinkView }>(`/api/workspaces/${workspaceId}/flow/sync`, { method: "POST" });
+  },
+  getNotificationPrefs(workspaceId: string) {
+    return request<{ prefs: NotificationPrefs }>(`/api/workspaces/${workspaceId}/notification-preferences`);
+  },
+  setNotificationPrefs(workspaceId: string, body: Omit<NotificationPrefs, "largeExpenseMinor"> & { largeExpenseMajor: string | null }) {
+    return request<{ prefs: NotificationPrefs }>(`/api/workspaces/${workspaceId}/notification-preferences`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  listAutomations(workspaceId: string) {
+    return request<{ automations: AutomationView[] }>(`/api/workspaces/${workspaceId}/automations`);
+  },
+  createAutomation(workspaceId: string, body: AutomationBody) {
+    return request<{ automation: AutomationView }>(`/api/workspaces/${workspaceId}/automations`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateAutomation(workspaceId: string, id: string, body: AutomationBody & { paused?: boolean }) {
+    return request<{ automation: AutomationView }>(`/api/workspaces/${workspaceId}/automations/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteAutomation(workspaceId: string, id: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/automations/${id}`, { method: "DELETE" });
+  },
+  runAutomation(workspaceId: string, id: string) {
+    return request<{ automation: AutomationView }>(`/api/workspaces/${workspaceId}/automations/${id}/run`, { method: "POST" });
+  },
+  listTransactionRules(workspaceId: string) {
+    return request<{ rules: RuleView[] }>(`/api/workspaces/${workspaceId}/transaction-rules`);
+  },
+  createTransactionRule(workspaceId: string, body: TransactionRuleBody) {
+    return request<{ rule: RuleView }>(`/api/workspaces/${workspaceId}/transaction-rules`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateTransactionRule(workspaceId: string, ruleId: string, body: TransactionRuleBody) {
+    return request<{ rule: RuleView }>(`/api/workspaces/${workspaceId}/transaction-rules/${ruleId}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteTransactionRule(workspaceId: string, ruleId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/transaction-rules/${ruleId}`, { method: "DELETE" });
+  },
+  reorderTransactionRules(workspaceId: string, ids: string[]) {
+    return request<{ rules: RuleView[] }>(`/api/workspaces/${workspaceId}/transaction-rules`, { method: "PUT", body: JSON.stringify({ ids }) });
+  },
+  applyTransactionRules(workspaceId: string, dryRun: boolean) {
+    return request<{ changed: number; scanned: number }>(`/api/workspaces/${workspaceId}/transaction-rules/apply`, { method: "POST", body: JSON.stringify({ dryRun }) });
+  },
+  listScheduledExports(workspaceId: string) {
+    return request<{ schedules: ScheduledExportView[] }>(`/api/workspaces/${workspaceId}/scheduled-exports`);
+  },
+  createScheduledExport(workspaceId: string, body: ScheduledExportBody) {
+    return request<{ schedule: ScheduledExportView }>(`/api/workspaces/${workspaceId}/scheduled-exports`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateScheduledExport(workspaceId: string, id: string, body: ScheduledExportBody & { paused?: boolean }) {
+    return request<{ schedule: ScheduledExportView }>(`/api/workspaces/${workspaceId}/scheduled-exports/${id}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deleteScheduledExport(workspaceId: string, id: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/scheduled-exports/${id}`, { method: "DELETE" });
+  },
+  sendScheduledExport(workspaceId: string, id: string) {
+    return request<{ schedule: ScheduledExportView }>(`/api/workspaces/${workspaceId}/scheduled-exports/${id}/send`, { method: "POST" });
+  },
+  dashboardLayout(workspaceId: string) {
+    return request<{ widgets: Widget[]; custom: boolean }>(`/api/workspaces/${workspaceId}/dashboard-layout`);
+  },
+  saveDashboardLayout(workspaceId: string, widgets: Widget[] | null) {
+    return request<{ widgets: Widget[]; custom: boolean }>(`/api/workspaces/${workspaceId}/dashboard-layout`, { method: "PUT", body: JSON.stringify({ widgets }) });
+  },
+  insightsReport(workspaceId: string, query: ReportRange) {
+    return request<{ baseCurrency: string; compared: Array<{ from: string; to: string }>; unusual: Unusual[]; variances: CategoryVariance[]; savings: SavingsAnalysis }>(
+      `/api/workspaces/${workspaceId}/reports/insights?${new URLSearchParams(query)}`,
+    );
+  },
+  listDepartments(workspaceId: string) {
+    return request<{ departments: DepartmentView[]; defaultDepartmentId: string | null }>(`/api/workspaces/${workspaceId}/departments`);
+  },
+  createDepartment(workspaceId: string, body: DepartmentBody) {
+    return request<{ department: { id: string } }>(`/api/workspaces/${workspaceId}/departments`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updateDepartment(workspaceId: string, departmentId: string, body: Partial<DepartmentBody> & { archived?: boolean }) {
+    return request<{ department: { id: string } }>(`/api/workspaces/${workspaceId}/departments/${departmentId}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  deleteDepartment(workspaceId: string, departmentId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/departments/${departmentId}`, { method: "DELETE" });
+  },
+  listPolicies(workspaceId: string) {
+    return request<{ policies: SpendingPolicyView[] }>(`/api/workspaces/${workspaceId}/spending-policies`);
+  },
+  createPolicy(workspaceId: string, body: SpendingPolicyBody) {
+    return request<{ policy: SpendingPolicyView }>(`/api/workspaces/${workspaceId}/spending-policies`, { method: "POST", body: JSON.stringify(body) });
+  },
+  updatePolicy(workspaceId: string, policyId: string, body: SpendingPolicyBody) {
+    return request<{ policy: SpendingPolicyView }>(`/api/workspaces/${workspaceId}/spending-policies/${policyId}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  deletePolicy(workspaceId: string, policyId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/spending-policies/${policyId}`, { method: "DELETE" });
+  },
+  checkPolicies(workspaceId: string, body: { budgetPoolId: string; amountMajor: string; currency: string; date: string; categoryId: string | null; merchant: string | null; hasReceipt: boolean }) {
+    return request<{
+      violations: PolicyViolation[];
+      lateSubmission: { deadline: string; daysLate: number; enforcement: "flag" | "block" } | null;
+      memberLimit: { limitMinor: number; spentMinor: number; remainingMinor: number; over: boolean; overByMinor: number; period: MemberLimitPeriod } | null;
+    }>(`/api/workspaces/${workspaceId}/policy-check`, { method: "POST", body: JSON.stringify(body) });
+  },
+  poolFunding(poolId: string) {
+    return request<PoolFunding>(`/api/budget-pools/${poolId}/contributions`);
+  },
+  addContribution(poolId: string, body: { amountMajor: string; date: string; note?: string | null; forUserId?: string | null }) {
+    return request<{ contribution: { id: string } }>(`/api/budget-pools/${poolId}/contributions`, { method: "POST", body: JSON.stringify(body) });
+  },
+  removeContribution(contributionId: string) {
+    return request<{ ok: boolean }>(`/api/pool-contributions/${contributionId}`, { method: "DELETE" });
+  },
+  setPoolAllocation(poolId: string, body: { mode: AllocationMode; targetMajor: string | null; shares: Array<{ userId: string; value: string }> }) {
+    return request<{ ok: boolean }>(`/api/budget-pools/${poolId}/allocation`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  remindContributors(poolId: string) {
+    return request<{ reminded: number }>(`/api/budget-pools/${poolId}/contributions/remind`, { method: "POST" });
+  },
+  updatePoolRules(poolId: string, body: { approverIds: string[]; autoApproveUpToMajor: string | null; memberLimitMajor: string | null; memberLimits: Array<{ userId: string; limitMajor: string }>; memberLimitPeriod: MemberLimitPeriod }) {
+    return request<{ pool: BudgetPool }>(`/api/budget-pools/${poolId}`, { method: "PUT", body: JSON.stringify(body) });
+  },
+  listReimbursements(workspaceId: string) {
+    return request<{ reimbursements: ReimbursementView[]; payouts: PayoutView[]; canPay: boolean }>(`/api/workspaces/${workspaceId}/reimbursements`);
+  },
+  createPayout(workspaceId: string, body: { reimbursementIds: string[]; method: PayoutMethod; reference?: string | null; paidOn: string }) {
+    return request<{ payout: { id: string; amountMinor: number; currency: string } }>(`/api/workspaces/${workspaceId}/payouts`, { method: "POST", body: JSON.stringify(body) });
+  },
+  undoPayout(workspaceId: string, payoutId: string) {
+    return request<{ ok: boolean }>(`/api/workspaces/${workspaceId}/payouts/${payoutId}`, { method: "DELETE" });
+  },
   decideApproval(
     approvalId: string,
     body: { decision: "approved" | "rejected"; reviewNote?: string | null },
@@ -650,7 +1049,7 @@ export const api = {
   async exportReport(
     workspaceId: string,
     body: {
-      format: "csv" | "pdf";
+      format: ExportFormat;
       from: string;
       to: string;
       template: "summary" | "pool" | "approvals";

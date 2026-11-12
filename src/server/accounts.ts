@@ -1,13 +1,16 @@
 import { Types } from "mongoose";
 import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
-import { Account as AccountModel, Transaction as TransactionModel, type AccountDocument } from "@/src/server/models";
+import { Account as AccountModel, Reconciliation as ReconciliationModel, Transaction as TransactionModel, type AccountDocument } from "@/src/server/models";
 import { requireAction, requireMembershipRole } from "@/src/server/workspace/members";
 import { accountBalance, checkTransfer, type AccountKind, type BalanceEntry } from "@/src/core/accounts";
 import type { TransactionType } from "@/src/core/models/enums";
 import type { Account } from "@/src/core/sync/types";
 import { reconcileGap } from "@/src/core/clearing";
 import { formatMinorToMajor } from "@/src/core/money";
+import { lastFour, maskAccountNumber, normalizeAccountNumber } from "@/src/core/sensitive";
+import { openField, sealField } from "@/src/server/security/field-crypto";
+import { appendAudit } from "@/src/server/audit";
 
 /** A malformed id is the caller's mistake (400), not a server error. */
 function oid(id: string | Types.ObjectId) {
@@ -23,6 +26,8 @@ export type AccountInput = {
   openingBalanceMinor: number;
   openingDate: string;
   institution?: string | null;
+  /** The account or card number; null clears it. */
+  number?: string | null;
 };
 
 export type AccountPatch = Partial<Omit<AccountInput, "kind" | "currency">> & { kind?: AccountKind; currency?: string; archived?: boolean };
@@ -85,6 +90,7 @@ function map(doc: AccountDocument, total?: Totals): Account {
     openingBalanceMinor: doc.openingBalanceMinor,
     openingDate: day(doc.openingDate),
     institution: doc.institution ?? null,
+    numberMasked: maskAccountNumber(doc.numberLast4),
     archived: Boolean(doc.archivedAt),
     // As of today: future-dated transactions show up in projections instead.
     balanceMinor: accountBalance(kind, doc.openingBalanceMinor, current),
@@ -126,6 +132,7 @@ export function createAccount(userId: string, workspaceId: string, input: Accoun
       openingBalanceMinor: input.openingBalanceMinor,
       openingDate: new Date(`${input.openingDate}T12:00:00.000Z`),
       institution: input.institution?.trim() || null,
+      ...numberFields(input.number),
       createdById: oid(userId),
     });
     return map(doc.toObject());
@@ -156,9 +163,42 @@ export function updateAccount(userId: string, accountId: string, patch: AccountP
     if (patch.openingBalanceMinor !== undefined) doc.openingBalanceMinor = patch.openingBalanceMinor;
     if (patch.openingDate !== undefined) doc.openingDate = new Date(`${patch.openingDate}T12:00:00.000Z`);
     if (patch.institution !== undefined) doc.institution = patch.institution?.trim() || null;
+    if (patch.number !== undefined) doc.set(numberFields(patch.number));
     if (patch.archived !== undefined) doc.archivedAt = patch.archived ? doc.archivedAt ?? new Date() : null;
     await doc.save();
     return withBalance(doc.toObject());
+  });
+}
+
+/** A number as stored: sealed, with its last four to show. */
+function numberFields(number: string | null | undefined) {
+  if (!number) return { numberSealed: null, numberLast4: null };
+  const clean = normalizeAccountNumber(number);
+  if (!clean) throw new ApiError(400, "invalid_request", "An account number is 4 to 34 letters and digits");
+  return { numberSealed: sealField(clean), numberLast4: lastFour(clean) };
+}
+
+/**
+ * The whole account number, for those who manage accounts, signed in (not
+ * with an access token). Each time is in the audit history.
+ */
+export function revealAccountNumber(userId: string, accountId: string) {
+  return withDb(async () => {
+    const doc = await AccountModel.findById(oid(accountId)).select("+numberSealed workspaceId name numberLast4");
+    if (!doc) throw new ApiError(404, "not_found", "Account not found");
+    await requireAction(userId, String(doc.workspaceId), "budget.manage");
+    if (!doc.numberSealed) throw new ApiError(404, "not_found", "No number is saved for this account");
+    const number = openField(doc.numberSealed) as string;
+    await appendAudit({
+      workspaceId: doc.workspaceId,
+      actorId: userId,
+      action: "account.number_shown",
+      entity: "account",
+      entityId: doc._id,
+      summary: `Account number shown: ${doc.name} (${maskAccountNumber(doc.numberLast4)})`,
+      data: { last4: doc.numberLast4 },
+    });
+    return { number };
   });
 }
 
@@ -270,6 +310,16 @@ export function reconcileAccount(userId: string, accountId: string, input: { sta
     doc.reconciledThrough = new Date(`${input.through}T12:00:00.000Z`);
     doc.reconciledBalanceMinor = input.statementMinor;
     await doc.save();
+    await ReconciliationModel.create({ workspaceId: doc.workspaceId, accountId: doc._id, userId: oid(userId), through: doc.reconciledThrough, statementMinor: input.statementMinor, currency: doc.currency, transactionCount: modifiedCount });
+    await appendAudit({
+      workspaceId: doc.workspaceId,
+      actorId: userId,
+      action: "account.reconciled",
+      entity: "account",
+      entityId: doc._id,
+      summary: `${doc.name} reconciled through ${input.through} at ${formatMinorToMajor(input.statementMinor)} ${doc.currency}`,
+      data: { through: input.through, statementMinor: input.statementMinor, transactions: modifiedCount },
+    });
     return { account: await withBalance(doc.toObject()), reconciled: modifiedCount };
   });
 }

@@ -19,6 +19,7 @@ export async function PATCH(
       openingBalanceMinor: body.openingMajor !== undefined ? parseMajorToMinor(body.openingMajor) : undefined,
       openingDate: body.openingDate,
       institution: body.institution,
+      number: body.number,
       archived: body.archived,
     });
     return jsonOk({ account });

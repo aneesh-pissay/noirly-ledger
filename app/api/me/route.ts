@@ -1,4 +1,4 @@
-import { getLedgerProvider, jsonError, jsonOk } from "@/src/server/api/http";
+import { getLedgerProvider, jsonError, jsonOk, refuseAccessToken } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
 import { deleteLedgerAccountData } from "@/src/server/users/delete-account";
 import { meSettingsBodySchema } from "@/src/core/schemas/ledger";
@@ -42,6 +42,7 @@ export async function PATCH(request: Request) {
 export async function DELETE() {
   try {
     const { ctx } = await getLedgerProvider();
+    refuseAccessToken(ctx, "Deleting your account");
     const summary = await withDb(() => deleteLedgerAccountData(ctx.identitySub));
     return jsonOk({ ok: true, ...summary });
   } catch (error) {

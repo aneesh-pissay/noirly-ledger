@@ -18,6 +18,11 @@ import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
 import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
 import type { ViewFilters } from "@/src/core/search";
 import type { FieldChange, HistoryAction } from "@/src/core/history";
+import type { ApprovalRuleSpec, ApprovalStepState } from "@/src/core/approval-rules";
+import type { PolicyViolation } from "@/src/core/spending-policies";
+import type { DeadlineSettings } from "@/src/core/deadlines";
+import type { PoolRules } from "@/src/core/pool-rules";
+import type { PoolTemplate } from "@/src/core/pool-templates";
 import type { GstAmounts, GstSettings } from "@/src/core/gst";
 import type { ColumnMapping, ImportRow } from "@/src/core/imports";
 
@@ -41,6 +46,10 @@ export type Workspace = {
   baseCurrency: string;
   /** Month (1–12) its financial year starts in. */
   fiscalYearStartMonth: number;
+  /** When expenses must be submitted and waiting approvals are chased. */
+  approvalDeadlines: DeadlineSettings;
+  /** Exchange rates are fetched from the rates provider as well as set by hand. */
+  autoFxRates: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -120,6 +129,8 @@ export type Transaction = {
   /** Who was paid, or paid you. */
   merchant: string | null;
   projectId: string | null;
+  /** The department or team it's spent by (src/core/group-budgets.ts). */
+  departmentId: string | null;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -145,6 +156,8 @@ export type Account = {
   openingBalanceMinor: MoneyMinor;
   openingDate: string;
   institution: string | null;
+  /** "•••• 1234" when a number is saved; the whole number is only given on asking. */
+  numberMasked: string | null;
   archived: boolean;
   balanceMinor: MoneyMinor;
   /** The balance leaving out pending transactions: what the bank should show. */
@@ -187,6 +200,10 @@ export type BudgetPool = {
   periodStart: string | null;
   periodEnd: string | null;
   archivedAt: string | null;
+  /** Its own approvers, auto-approval and per-member limits. */
+  rules: PoolRules;
+  /** The template it started from, if any. */
+  template: PoolTemplate | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -215,9 +232,19 @@ export type ApprovalRequest = {
   reviewNote: string | null;
   submittedAt: string | null;
   reviewedAt: string | null;
+  /** The chain of approvals it needs (src/core/approval-rules.ts); it's approved once the last step is. */
+  steps: ApprovalStepState[];
+  currentStep: number;
+  /** The rule that set the chain; null for the default single step. */
+  ruleName: string | null;
+  /** Submitted past the workspace's deadline. */
+  lateSubmission: { deadline: string; daysLate: number } | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/** A workspace's rule for which expenses need which approvers; amounts in its base currency. */
+export type ApprovalRuleView = ApprovalRuleSpec & { order: number };
 
 export type FxRate = {
   id: string;
@@ -225,6 +252,8 @@ export type FxRate = {
   currency: string;
   rateToBaseScaled: number;
   effectiveFrom: string;
+  /** Set by hand, or fetched from the rates provider. */
+  source: "user" | "auto";
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -239,7 +268,12 @@ export type NotificationKind =
   | "bill.reminder"
   | "subscription.price"
   | "goal.milestone"
-  | "goal.contribution";
+  | "goal.contribution"
+  | "pool.contribution"
+  | "report.failed"
+  | "workflow"
+  | "transaction.large"
+  | "email.received";
 
 export type InAppNotification = {
   id: string;
@@ -269,8 +303,17 @@ export type CustomRoleView = { id: string; name: string; permissions: Permission
 export type ApprovalView = ApprovalRequest & {
   transaction: Transaction;
   submitterName: string;
-  /** Whether the viewer may approve or reject it (not their own, unless nobody else can). */
+  /** Whether the viewer may decide its current step (not their own, nor a second step, unless nobody else can). */
   canDecide: boolean;
+  /** When the viewer decides it standing in for someone away: who. */
+  actingForName: string | null;
+  /** How it breaks the workspace's spending policies, as it is now (a receipt added later clears that flag). */
+  violations: PolicyViolation[];
+  /** While waiting: whole days its current step has waited, and whether that's past the workspace's lines. */
+  waitingDays: number | null;
+  late: boolean;
+  /** Each step in words ("Any approver", "Ada or Ben"), and who decided it. */
+  stepLabels: Array<{ label: string; decidedByName: string | null }>;
 };
 
 export type CreateBudgetPoolInput = {
@@ -281,6 +324,8 @@ export type CreateBudgetPoolInput = {
   currency?: string;
   periodStart?: string | null;
   periodEnd?: string | null;
+  /** Start from a template's rules, shares and categories. */
+  template?: PoolTemplate | null;
 };
 
 export type SubmitExpenseInput = {
@@ -293,6 +338,12 @@ export type SubmitExpenseInput = {
   note?: string | null;
   receiptUrl?: string | null;
   receiptStorageKey?: string | null;
+  /** Paid out of their own pocket: pay them back once it's approved. */
+  reimburse?: boolean;
+  merchant?: string | null;
+  projectId?: string | null;
+  /** Left out: the submitter's own team or department, when there's just one. */
+  departmentId?: string | null;
 };
 
 export type DecideApprovalInput = {
@@ -351,11 +402,14 @@ export type CreateTransactionInput = {
   tags?: string[] | null;
   merchant?: string | null;
   projectId?: string | null;
+  departmentId?: string | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;
   receiptStorageKey?: string | null;
   recurrence?: RecurrenceRule | null;
+  /** Server-side only (imports): the category when neither this nor a rule gives one. */
+  fallbackCategoryId?: string | null;
 };
 
 export type UpdateTransactionInput = Partial<
@@ -432,7 +486,7 @@ export type ImportPreview = {
   /** Lines above the column names, like the account details banks put first. */
   preamble: string[];
   mapping: ColumnMapping;
-  rows: Array<ImportRow & { duplicate: boolean }>;
+  rows: Array<ImportRow & { duplicate: boolean; /** What the workspace's rules will fill in for it. */ rule: { names: string[]; categoryId: string | null; merchant: string | null } | null }>;
 };
 
 export type ImportBatchSummary = {
@@ -624,6 +678,9 @@ export type Project = {
   spentMinor: MoneyMinor;
   incomeMinor: MoneyMinor;
   transactionCount: number;
+  /** For the project's whole life, in base currency; null for none. */
+  budgetMinor: MoneyMinor | null;
+  alertPct: number;
 };
 
 export type TagSummary = { tag: string; count: number };

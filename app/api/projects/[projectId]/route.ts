@@ -1,6 +1,7 @@
 import { getLedgerProvider, jsonError, jsonOk, assertObjectId } from "@/src/server/api/http";
 import { updateProjectBodySchema } from "@/src/core/schemas/ledger";
 import { deleteProject, updateProject } from "@/src/server/projects";
+import { parseMajorToMinor } from "@/src/core/money";
 
 export async function PATCH(
   request: Request,
@@ -9,9 +10,14 @@ export async function PATCH(
   try {
     const { projectId } = await params;
     await assertObjectId(projectId, "projectId");
-    const body = updateProjectBodySchema.parse(await request.json());
+    const { budgetMajor, ...body } = updateProjectBodySchema.parse(await request.json());
     const { ctx } = await getLedgerProvider();
-    return jsonOk({ project: await updateProject(ctx.userId, projectId, body) });
+    return jsonOk({
+      project: await updateProject(ctx.userId, projectId, {
+        ...body,
+        ...(budgetMajor !== undefined ? { budgetMinor: budgetMajor === null ? null : parseMajorToMinor(budgetMajor) } : {}),
+      }),
+    });
   } catch (error) {
     return jsonError(error);
   }

@@ -8,6 +8,7 @@ export default async function PersonalHomePage() {
       workspaceId={personal.id}
       baseCurrency={personal.baseCurrency}
       displayName={ctx.displayName}
+      fiscalYearStartMonth={personal.fiscalYearStartMonth}
     />
   );
 }

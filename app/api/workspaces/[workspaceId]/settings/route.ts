@@ -5,8 +5,9 @@ import { withDb } from "@/src/server/db/mongodb";
 import { Workspace } from "@/src/server/models";
 import { requireAction } from "@/src/server/workspace/members";
 import { mapWorkspace } from "@/src/server/mappers";
+import { deadlineProblem } from "@/src/core/deadlines";
 
-/** Workspace-wide settings the owner sets: when the financial year starts, and what a shared workspace is for. */
+/** Workspace-wide settings the owner sets: when the financial year starts, what a shared workspace is for, and its approval deadlines. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ workspaceId: string }> },
@@ -18,6 +19,10 @@ export async function PATCH(
     const { ctx } = await getLedgerProvider();
     const workspace = await withDb(async () => {
       await requireAction(ctx.userId, workspaceId, "workspace.manage");
+      if (body.approvalDeadlines) {
+        const problem = deadlineProblem(body.approvalDeadlines);
+        if (problem) throw new ApiError(400, "invalid_request", problem);
+      }
       if (body.purpose) {
         const current = await Workspace.findById(new Types.ObjectId(workspaceId)).select("kind").lean();
         if (current?.kind === "personal") throw new ApiError(400, "invalid_request", "The personal workspace is always personal");

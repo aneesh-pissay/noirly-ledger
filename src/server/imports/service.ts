@@ -10,6 +10,8 @@ import { duplicateReason } from "@/src/core/duplicates";
 import { bankFormat, detectBankFormat, findBankFormat } from "@/src/core/bank-formats";
 import { guessMapping, mapRows, MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, parseCsv, type ColumnMapping, type ImportRow } from "@/src/core/imports";
 import type { CreateTransactionInput, ImportBatchSummary, ImportPreview, LedgerSyncProvider } from "@/src/core/sync/types";
+import { loadRules } from "@/src/server/transaction-rules";
+import { applyRules } from "@/src/core/auto-rules";
 
 function oid(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new ApiError(400, "invalid_request", "Invalid id");
@@ -100,12 +102,24 @@ export function previewImport(userId: string, workspaceId: string, file: Stateme
     const mapping = options.mapping ?? startingMapping(rows, options.bank);
     const parsed = mapRows(rows, mapping);
     const duplicates = await markDuplicates(oid(workspaceId), options.accountId ?? null, parsed);
+    // What the workspace's rules will fill in, so it shows before anything's added.
+    const rules = await loadRules(oid(workspaceId));
+    const ruleFor = (row: (typeof parsed)[number]) => {
+      if (!rules.length || row.amountMinor == null) return null;
+      const result = applyRules(
+        rules,
+        { type: row.amountMinor < 0 ? "expense" : "income", note: row.description || null, merchant: null, accountId: options.accountId ?? null, amountMinor: Math.abs(row.amountMinor) },
+        { categoryId: false, merchant: false, projectId: false },
+      );
+      if (!result.ruleIds.length) return null;
+      return { names: result.ruleIds.map((id) => rules.find((r) => r.id === id)?.name ?? "Rule"), categoryId: result.categoryId, merchant: result.merchant };
+    };
     return {
       fileName: file.name,
       headers: rows[mapping.headerRow] ?? [],
       preamble: rows.slice(0, mapping.headerRow).map((r) => r.join(" ").trim()).filter(Boolean),
       mapping,
-      rows: parsed.map((row) => ({ ...row, duplicate: duplicates.has(row.line) })),
+      rows: parsed.map((row) => ({ ...row, duplicate: duplicates.has(row.line), rule: ruleFor(row) })),
     };
   });
 }
@@ -150,7 +164,8 @@ export async function commitImport(
       type: row.amountMinor! < 0 ? "expense" : "income",
       amountMinor: Math.abs(row.amountMinor!),
       currency,
-      categoryId: options.categoryId,
+      // The workspace's rules come first; the category picked for the import fills in the rest.
+      fallbackCategoryId: options.categoryId,
       accountId: options.accountId,
       date: row.date!,
       note: row.description || null,

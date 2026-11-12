@@ -27,6 +27,17 @@ describe("permissions", () => {
     expect(roleOf("approver")).toBe("approver");
   });
 
+  it("leaves the finer permissions with owners unless a custom role is given them", () => {
+    for (const action of ["transaction.manage", "members.invite", "integrations.manage"] as const) {
+      expect(can("approver", action)).toBe(false);
+      expect(can("owner", action)).toBe(true);
+      expect(can({ role: "member", permissions: [action] }, action)).toBe(true);
+    }
+    expect(can("approver", "audit.view")).toBe(true);
+    expect(can("member", "audit.view")).toBe(false);
+    expect(customRolePermissions(["members.invite", "transaction.manage", "integrations.manage", "audit.view"])).toEqual(["workspace.read", "audit.view", "transaction.manage", "members.invite", "integrations.manage"]);
+  });
+
   it("keeps running the workspace and its members out of custom roles", () => {
     expect(customRolePermissions(["members.manage", "expense.decide", "expense.decide", "nonsense"])).toEqual(["workspace.read", "expense.decide"]);
   });

@@ -28,6 +28,36 @@ export default async function SettingsPage() {
       >
         Manage FX rates →
       </Link>
+      <Link
+        href="/settings/notifications"
+        className="mt-3 block text-sm text-[var(--accent)] hover:underline"
+      >
+        Notifications and reminders →
+      </Link>
+      <Link
+        href="/settings/flow"
+        className="mt-3 block text-sm text-[var(--accent)] hover:underline"
+      >
+        Noirly Flow: bills as tasks →
+      </Link>
+      <Link
+        href="/settings/calendar"
+        className="mt-3 block text-sm text-[var(--accent)] hover:underline"
+      >
+        Google Calendar: bills on your calendar →
+      </Link>
+      <Link
+        href="/settings/api"
+        className="mt-3 block text-sm text-[var(--accent)] hover:underline"
+      >
+        API tokens and webhooks →
+      </Link>
+      <Link
+        href="/settings/backups"
+        className="mt-3 block text-sm text-[var(--accent)] hover:underline"
+      >
+        Export, backups and retention →
+      </Link>
     </PageContainer>
   );
 }

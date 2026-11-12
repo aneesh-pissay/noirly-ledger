@@ -7,6 +7,7 @@ import {
   type Types,
 } from "mongoose";
 import { PAYMENT_REPEATS } from "@/src/core/payments";
+import { sealedText } from "@/src/server/security/field-crypto";
 
 /** A bill paid by hand, with a due date; see src/core/payments.ts. */
 const scheduledPaymentSchema = new Schema(
@@ -38,6 +39,8 @@ const scheduledPaymentSchema = new Schema(
 );
 
 scheduledPaymentSchema.index({ workspaceId: 1, dueDate: 1 });
+// The note is stored sealed (src/server/security/field-crypto.ts).
+sealedText(scheduledPaymentSchema, { path: "note" });
 
 export type ScheduledPaymentDocument = InferSchemaType<typeof scheduledPaymentSchema> & {
   _id: Types.ObjectId;

@@ -11,6 +11,9 @@ import {
 import { ApiError } from "@/src/server/api/http";
 import { can, customRolePermissions, roleOf, type Grant, type PermissionAction } from "@/src/core/permissions/can";
 import type { MemberRole } from "@/src/core/models/enums";
+import { appendAudit } from "@/src/server/audit";
+import { requireSecondOwner, type SecondApproval } from "@/src/server/dual-control";
+import { isSensitiveRemoval, isSensitiveRoleChange } from "@/src/core/dual-control";
 
 function oid(id: string) {
   return new Types.ObjectId(id);
@@ -93,7 +96,8 @@ export async function createInvite(input: {
   role: Exclude<MemberRole, "owner">;
 }) {
   return withDb(async () => {
-    await requireAction(input.userId, input.workspaceId, "members.manage");
+    // Inviting someone as a member can be handed out; inviting an approver is managing members.
+    await requireAction(input.userId, input.workspaceId, input.role === "member" ? "members.invite" : "members.manage");
     const token = randomBytes(24).toString("base64url");
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -130,6 +134,15 @@ export async function acceptInvite(userId: string, token: string) {
         userId: oid(userId),
         role: invite.role,
       });
+      await appendAudit({
+        workspaceId: invite.workspaceId,
+        actorId: userId,
+        action: "member.joined",
+        entity: "member",
+        entityId: userId,
+        summary: `${await displayNameOf(userId)} joined as ${invite.role}`,
+        data: { role: invite.role, inviteId: invite._id },
+      });
     }
     invite.usedAt = new Date();
     await invite.save();
@@ -148,6 +161,8 @@ export async function updateMemberRole(input: {
   role: MemberRole;
   /** A custom role to give them, null to take it away; left out, it stays as it is. */
   customRoleId?: string | null;
+  /** Set when a second owner agreed to it (src/server/dual-control.ts). */
+  approval?: SecondApproval;
 }) {
   return withDb(async () => {
     const actorRole = roleOf(await requireAction(
@@ -177,6 +192,18 @@ export async function updateMemberRole(input: {
         throw new ApiError(400, "invalid_request", "Keep at least one owner");
       }
     }
+    const previousRole = membership.role;
+    // Who decides is the workspace's to agree on: with two-person approval on, a second owner.
+    if (isSensitiveRoleChange({ from: previousRole as MemberRole, to: input.role, fromCustomRoleId: membership.customRoleId ? String(membership.customRoleId) : null, toCustomRoleId: input.role === "owner" ? null : input.customRoleId })) {
+      await requireSecondOwner({
+        actorId: input.actorId,
+        workspaceId: input.workspaceId,
+        kind: "member.role",
+        payload: { targetUserId: input.targetUserId, role: input.role, ...(input.customRoleId !== undefined ? { customRoleId: input.customRoleId } : {}) },
+        summary: `Make ${await displayNameOf(input.targetUserId)} ${input.role}${input.customRoleId ? " with a custom role" : ""} (now ${previousRole})`,
+        approval: input.approval,
+      });
+    }
     membership.role = input.role;
     if (input.role === "owner") {
       // An owner can do everything; a custom role would only narrow that.
@@ -188,6 +215,15 @@ export async function updateMemberRole(input: {
       membership.customRoleId = input.customRoleId ? oid(input.customRoleId) : null;
     }
     await membership.save();
+    await appendAudit({
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      action: "member.role_changed",
+      entity: "member",
+      entityId: input.targetUserId,
+      summary: `${await displayNameOf(input.targetUserId)} is now ${input.role}${membership.customRoleId ? " with a custom role" : ""}`,
+      data: { role: input.role, previousRole, customRoleId: membership.customRoleId ? String(membership.customRoleId) : null },
+    });
     return { userId: input.targetUserId, role: input.role, customRoleId: membership.customRoleId ? String(membership.customRoleId) : null };
   });
 }
@@ -196,6 +232,7 @@ export async function removeMember(input: {
   actorId: string;
   workspaceId: string;
   targetUserId: string;
+  approval?: SecondApproval;
 }) {
   return withDb(async () => {
     await requireAction(input.actorId, input.workspaceId, "members.manage");
@@ -215,6 +252,29 @@ export async function removeMember(input: {
         throw new ApiError(400, "invalid_request", "Keep at least one owner");
       }
     }
+    if (isSensitiveRemoval(membership.role as MemberRole)) {
+      await requireSecondOwner({
+        actorId: input.actorId,
+        workspaceId: input.workspaceId,
+        kind: "member.remove",
+        payload: { targetUserId: input.targetUserId },
+        summary: `Remove ${await displayNameOf(input.targetUserId)} (${membership.role})`,
+        approval: input.approval,
+      });
+    }
     await membership.deleteOne();
+    await appendAudit({
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      action: "member.removed",
+      entity: "member",
+      entityId: input.targetUserId,
+      summary: `${await displayNameOf(input.targetUserId)} was removed (was ${membership.role})`,
+      data: { role: membership.role },
+    });
   });
+}
+
+async function displayNameOf(userId: string) {
+  return (await LedgerUser.findById(oid(userId)).select("displayName").lean())?.displayName ?? "Someone";
 }

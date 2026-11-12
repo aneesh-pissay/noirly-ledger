@@ -10,6 +10,7 @@ import {
   RECURRENCE_FREQUENCIES,
   TRANSACTION_TYPES,
 } from "@/src/core/models/enums";
+import { sealedText } from "@/src/server/security/field-crypto";
 import { CLEARING_STATES } from "@/src/core/clearing";
 import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
 
@@ -127,6 +128,7 @@ const transactionSchema = new Schema(
     merchant: { type: String, default: null },
     merchantKey: { type: String, default: null },
     projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null, index: true },
+    departmentId: { type: Schema.Types.ObjectId, ref: "Department", default: null, index: true },
     // EMI payments: the plan, and which payment (0 the processing fee, -1 paying off early).
     installmentPlanId: { type: Schema.Types.ObjectId, ref: "InstallmentPlan", default: null, index: true },
     installmentNumber: { type: Number, default: null },
@@ -141,7 +143,10 @@ const transactionSchema = new Schema(
     // Transactions someone said are separate payments, though they look alike (see src/server/duplicates.ts).
     notDuplicateOf: { type: [Schema.Types.ObjectId], default: [] },
     date: { type: Date, required: true, index: true },
+    // Stored sealed; read back as text (src/server/security/field-crypto.ts).
     note: { type: String, default: null },
+    // Keyed hashes of the note's word beginnings, for search.
+    noteTerms: { type: [String], default: undefined, select: false },
     receiptUrl: { type: String, default: null },
     receiptStorageKey: { type: String, default: null },
     isRecurring: { type: Boolean, default: false },
@@ -180,6 +185,8 @@ transactionSchema.index({ workspaceId: 1, upiRef: 1 });
 transactionSchema.index({ budgetPoolId: 1, isPosted: 1 });
 // The recurring engine looks up a rule's occurrences by date.
 transactionSchema.index({ recurringParentId: 1, date: -1 });
+transactionSchema.index({ workspaceId: 1, noteTerms: 1 });
+sealedText(transactionSchema, { path: "note", termsPath: "noteTerms" });
 
 export type TransactionDocument = InferSchemaType<typeof transactionSchema> & {
   _id: Types.ObjectId;

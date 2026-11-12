@@ -8,6 +8,7 @@ import { api } from "@/src/lib/api-client";
 import { qk } from "@/src/core/sync/query-keys";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import type { Project } from "@/src/core/sync/types";
+import { formatMinorToMajor } from "@/src/core/money";
 
 type Props = { workspaceId: string; baseCurrency: string };
 
@@ -48,10 +49,25 @@ export function ProjectsScreen({ workspaceId, baseCurrency }: Props) {
         </Link>
       </div>
       <div className="text-right font-mono text-sm tabular-nums">
-        <p>{money(project.spentMinor)} <span className="text-[11px] text-[var(--muted-foreground)]">spent</span></p>
+        <p>
+          {money(project.spentMinor)}{" "}
+          <span className="text-[11px] text-[var(--muted-foreground)]">{project.budgetMinor !== null ? `of ${money(project.budgetMinor)}` : "spent"}</span>
+        </p>
+        {project.budgetMinor !== null ? (
+          <p className={`text-[11px] ${project.spentMinor > project.budgetMinor ? "text-[var(--balance-negative)]" : "text-[var(--muted-foreground)]"}`}>
+            {project.spentMinor > project.budgetMinor ? `over by ${money(project.spentMinor - project.budgetMinor)}` : `${money(project.budgetMinor - project.spentMinor)} left`}
+          </p>
+        ) : null}
         {project.incomeMinor ? <p className="text-[11px] text-[var(--muted-foreground)]">{money(project.incomeMinor)} in</p> : null}
       </div>
       <div className="flex gap-2">
+        <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" disabled={change.isPending}
+          onClick={() => {
+            const value = window.prompt(`Budget for ${project.name} (${baseCurrency}), for the whole project. Leave empty for none.`, project.budgetMinor !== null ? formatMinorToMajor(project.budgetMinor) : "");
+            if (value !== null) change.mutate(() => api.updateProject(project.id, { budgetMajor: value.trim() || null }));
+          }}>
+          Budget
+        </button>
         <button type="button" className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]" disabled={change.isPending}
           onClick={() => change.mutate(() => api.updateProject(project.id, { archived: !project.archived }))}>
           {project.archived ? "Reopen" : "Archive"}

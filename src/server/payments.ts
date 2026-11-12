@@ -1,7 +1,7 @@
 import { Types } from "mongoose";
 import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
-import { Account as AccountModel, ScheduledPayment, Transaction as TransactionModel } from "@/src/server/models";
+import { Account as AccountModel, Category, ScheduledPayment, Transaction as TransactionModel } from "@/src/server/models";
 import type { ScheduledPaymentDocument } from "@/src/server/models/ScheduledPayment";
 import type { TransactionDocument } from "@/src/server/models/Transaction";
 import { mapTransaction } from "@/src/server/mappers";
@@ -10,6 +10,8 @@ import { nextDueDate, paymentStatus, type PaymentRepeat, type PaymentView } from
 import { rankMatches, RECEIPT_WINDOW_DAYS } from "@/src/core/receipts";
 import { normalizeUpiId } from "@/src/core/upi";
 import type { LedgerSyncProvider, Transaction } from "@/src/core/sync/types";
+import { appendAudit } from "@/src/server/audit";
+import { formatMoney } from "@/src/core/locale-format";
 
 function oid(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new ApiError(400, "invalid_request", "Invalid id");
@@ -67,6 +69,13 @@ export function toView(doc: ScheduledPaymentDocument, asOf = today()): PaymentVi
 }
 
 /** The account's currency when one is chosen (a payment from it is in its currency), else the one given. */
+/** A category from another workspace can't be put on a bill here. */
+async function categoryIn(workspaceId: Types.ObjectId, categoryId: string | null | undefined) {
+  if (!categoryId) return null;
+  if (!(await Category.exists({ _id: oid(categoryId), workspaceId }))) throw new ApiError(400, "invalid_request", "That category isn't in this workspace");
+  return oid(categoryId);
+}
+
 async function currencyFor(workspaceId: Types.ObjectId, accountId: string | null, currency: string) {
   if (!accountId) return currency.toUpperCase();
   const account = await AccountModel.findOne({ _id: oid(accountId), workspaceId }).select("currency").lean();
@@ -99,7 +108,7 @@ export function createPayment(userId: string, workspaceId: string, input: Paymen
       payeeName: input.payeeName?.trim() || null,
       currency: await currencyFor(ws, input.accountId, input.currency),
       accountId: input.accountId ? oid(input.accountId) : null,
-      categoryId: input.categoryId ? oid(input.categoryId) : null,
+      categoryId: await categoryIn(ws, input.categoryId),
       dayOfMonth: Number(input.dueDate.slice(8)),
       createdById: oid(userId),
     });
@@ -127,7 +136,7 @@ export function updatePayment(userId: string, paymentId: string, patch: Partial<
     }
     if (patch.accountId !== undefined) doc.accountId = patch.accountId ? oid(patch.accountId) : null;
     if (patch.accountId !== undefined || patch.currency !== undefined) doc.currency = await currencyFor(doc.workspaceId, doc.accountId ? String(doc.accountId) : null, patch.currency ?? doc.currency);
-    if (patch.categoryId !== undefined) doc.categoryId = patch.categoryId ? oid(patch.categoryId) : null;
+    if (patch.categoryId !== undefined) doc.categoryId = await categoryIn(doc.workspaceId, patch.categoryId);
     if (patch.note !== undefined) doc.note = patch.note;
     if (patch.upiId !== undefined) doc.upiId = upiIdOf(patch.upiId);
     if (patch.payeeName !== undefined) doc.payeeName = patch.payeeName?.trim() || null;
@@ -237,6 +246,15 @@ export async function payPayment(sync: LedgerSyncProvider, userId: string, payme
           createdById: doc.createdById,
         })
       : null;
+    await appendAudit({
+      workspaceId: doc.workspaceId,
+      actorId: userId,
+      action: "payment.paid",
+      entity: "payment",
+      entityId: doc._id,
+      summary: `Bill paid: ${doc.name}, ${formatMoney(paid.paidAmountMinor, doc.currency)} on ${paid.paidOn} (${input.how === "record" ? "expense recorded" : input.how === "link" ? "linked to an expense" : "marked paid"})`,
+      data: { ...paid, how: input.how, dueDate: doc.dueDate },
+    });
     return { payment: toView(updated), next: next ? toView(next.toObject() as ScheduledPaymentDocument) : null };
   });
 }
@@ -258,6 +276,15 @@ export async function undoPayment(sync: LedgerSyncProvider, userId: string, paym
   return withDb(async () => {
     await ScheduledPayment.deleteOne({ previousId: doc._id, paidOn: null });
     const updated = await ScheduledPayment.findByIdAndUpdate(doc._id, { $set: { paidOn: null, paidAmountMinor: null, transactionId: null, recordedHere: false } }, { new: true }).lean<ScheduledPaymentDocument>();
+    await appendAudit({
+      workspaceId: doc.workspaceId,
+      actorId: userId,
+      action: "payment.undone",
+      entity: "payment",
+      entityId: doc._id,
+      summary: `Bill payment taken back: ${doc.name}, paid ${doc.paidOn}`,
+      data: { paidOn: doc.paidOn, paidAmountMinor: doc.paidAmountMinor ?? null, transactionId: doc.transactionId ?? null },
+    });
     return toView(updated!);
   });
 }

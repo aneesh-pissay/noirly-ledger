@@ -40,6 +40,7 @@ export async function PATCH(
       tags: body.tags,
       merchant: body.merchant,
       projectId: body.projectId,
+      departmentId: body.departmentId,
       splits: body.splits === undefined ? undefined : body.splits === null ? null : body.splits.map((line) => ({ categoryId: line.categoryId, amountMinor: parseMajorToMinor(line.amountMajor), note: line.note ?? null })),
       toAmountMinor: body.toAmountMajor === undefined ? undefined : body.toAmountMajor === null ? null : parseMajorToMinor(body.toAmountMajor),
       date: body.date,

@@ -2,9 +2,11 @@ import { randomUUID } from "node:crypto";
 import { Types } from "mongoose";
 import { ApiError } from "@/src/server/api/http";
 import { withDb } from "@/src/server/db/mongodb";
-import { Budget as BudgetModel, BudgetRevision, type BudgetDocument } from "@/src/server/models";
+import { Budget as BudgetModel, BudgetRevision, Category, type BudgetDocument } from "@/src/server/models";
 import { requireAction, requireMembershipRole } from "@/src/server/workspace/members";
-import { checkBudgetMove, type RevisionReason } from "@/src/core/budgets/revisions";
+import { appendAudit } from "@/src/server/audit";
+import { formatMinorToMajor } from "@/src/core/money";
+import { checkBudgetMove, REVISION_LABEL, type RevisionReason } from "@/src/core/budgets/revisions";
 import type { BudgetPeriod } from "@/src/core/models/enums";
 import type { BudgetRevisionRecord } from "@/src/core/sync/types";
 
@@ -36,6 +38,17 @@ export async function recordRevision(input: {
     moveId: input.moveId ?? null,
     otherBudgetId: input.otherBudgetId ?? null,
     createdById: new Types.ObjectId(input.userId),
+  });
+  const category = await Category.findById(input.budget.categoryId).select("name").lean();
+  const limit = (minor: number | null) => (minor == null ? "none" : formatMinorToMajor(minor));
+  await appendAudit({
+    workspaceId: input.budget.workspaceId,
+    actorId: input.userId,
+    action: `budget.${input.reason}`,
+    entity: "budget",
+    entityId: input.budget._id,
+    summary: `${REVISION_LABEL[input.reason]}: ${category?.name ?? "a"} ${input.budget.period} budget, ${limit(input.previousLimitMinor)} → ${limit(input.limitMinor)}`,
+    data: { previousLimitMinor: input.previousLimitMinor, limitMinor: input.limitMinor, note: input.note?.trim() || null, categoryId: input.budget.categoryId, period: input.budget.period, moveId: input.moveId ?? null },
   });
 }
 

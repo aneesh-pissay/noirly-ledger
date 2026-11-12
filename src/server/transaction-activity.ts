@@ -7,6 +7,14 @@ import { receiptUrlFor, receiptWorkspaceId } from "@/src/server/storage/receipt-
 import { can } from "@/src/core/permissions/can";
 import { MAX_ATTACHMENTS, type FieldChange, type HistoryAction } from "@/src/core/history";
 import type { TransactionActivity } from "@/src/core/sync/types";
+import { appendAudit } from "@/src/server/audit";
+import { actionLabel } from "@/src/core/audit";
+import { formatMoney } from "@/src/core/locale-format";
+import { openField, sealField } from "@/src/server/security/field-crypto";
+import { REDACTED } from "@/src/core/sensitive";
+
+/** Fields whose text is kept sealed in the history too. */
+export const SEALED_FIELDS = new Set<string>(["note"]);
 
 function oid(id: string) {
   if (!Types.ObjectId.isValid(id)) throw new ApiError(400, "invalid_request", "Invalid id");
@@ -27,8 +35,22 @@ export async function recordChange(input: {
     transactionId: input.transactionId,
     actorId: new Types.ObjectId(input.actorId),
     action: input.action,
-    changes: input.changes ?? [],
+    // A note's old and new text are kept sealed, like the note itself.
+    changes: (input.changes ?? []).map((ch) => (SEALED_FIELDS.has(ch.field) ? { ...ch, from: sealField(ch.from as string | null), to: sealField(ch.to as string | null) } : ch)),
     detail: input.detail ?? null,
+  });
+  // The audit history says which transaction, in words that outlast it.
+  const txn = await TransactionModel.findById(input.transactionId).select("type amountMinor currency merchant note date").lean();
+  const what = txn ? `${txn.type} ${formatMoney(txn.amountMinor, txn.currency)}${txn.merchant ? ` · ${txn.merchant}` : ""} on ${txn.date.toISOString().slice(0, 10)}` : "a transaction";
+  await appendAudit({
+    workspaceId: input.workspaceId,
+    actorId: input.actorId,
+    action: `transaction.${input.action}`,
+    entity: "transaction",
+    entityId: input.transactionId,
+    summary: `${actionLabel(`transaction.${input.action}`)}: ${what}${input.changes?.length ? ` (${input.changes.map((c) => c.field).join(", ")})` : ""}`,
+    // The audit history keeps that a note changed, not what it said.
+    data: { changes: (input.changes ?? []).map((ch) => (SEALED_FIELDS.has(ch.field) ? { ...ch, from: REDACTED, to: REDACTED } : ch)), detail: input.detail ?? null },
   });
 }
 
@@ -37,7 +59,7 @@ async function requireTransaction(userId: string, transactionId: string, { inclu
   const doc = await TransactionModel.findOne({ _id: oid(transactionId), ...(includeDeleted ? {} : { deletedAt: null }) });
   if (!doc) throw new ApiError(404, "not_found", "Transaction not found");
   const role = await requireMembershipRole(userId, String(doc.workspaceId));
-  const canEdit = String(doc.createdById) === userId || can(role, "workspace.manage");
+  const canEdit = String(doc.createdById) === userId || can(role, "transaction.manage");
   return { doc, role, canEdit };
 }
 
@@ -79,7 +101,7 @@ export function deleteComment(userId: string, commentId: string) {
     const comment = await TransactionComment.findOne({ _id: oid(commentId), deletedAt: null });
     if (!comment) throw new ApiError(404, "not_found", "Comment not found");
     const role = await requireMembershipRole(userId, String(comment.workspaceId));
-    if (String(comment.authorId) !== userId && !can(role, "workspace.manage")) throw new ApiError(403, "forbidden", "You can only delete your own comments");
+    if (String(comment.authorId) !== userId && !can(role, "transaction.manage")) throw new ApiError(403, "forbidden", "You can only delete your own comments");
     comment.deletedAt = new Date();
     await comment.save();
   });
@@ -110,12 +132,12 @@ export function getActivity(userId: string, transactionId: string): Promise<Tran
         body: c.body,
         authorName: nameOf.get(String(c.authorId)) ?? "Someone",
         createdAt: c.createdAt.toISOString(),
-        canDelete: String(c.authorId) === userId || can(role, "workspace.manage"),
+        canDelete: String(c.authorId) === userId || can(role, "transaction.manage"),
       })),
       history: changes.map((c) => ({
         id: String(c._id),
         action: c.action as HistoryAction,
-        changes: (c.changes ?? []) as FieldChange[],
+        changes: ((c.changes ?? []) as FieldChange[]).map((ch) => (SEALED_FIELDS.has(ch.field) ? { ...ch, from: openField(ch.from) as FieldChange["from"], to: openField(ch.to) as FieldChange["to"] } : ch)),
         detail: c.detail ?? null,
         actorName: nameOf.get(String(c.actorId)) ?? "Someone",
         createdAt: c.createdAt.toISOString(),

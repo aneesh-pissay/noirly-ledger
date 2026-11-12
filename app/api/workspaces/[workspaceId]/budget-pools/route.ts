@@ -32,6 +32,9 @@ export async function POST(
       description: body.description ?? null,
       limitAmountMinor: parseMajorToMinor(body.limitMajor),
       currency: body.currency,
+      template: body.template ?? null,
+      periodStart: body.periodStart ?? null,
+      periodEnd: body.periodEnd ?? null,
     });
     return jsonOk({ pool }, 201);
   } catch (error) {

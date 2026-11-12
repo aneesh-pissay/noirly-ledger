@@ -82,6 +82,11 @@ function WorkspaceRealtimeConnected({ workspaceId }: { workspaceId: string }) {
     void queryClient.invalidateQueries({ queryKey: qk.approvals(workspaceId) });
     void queryClient.invalidateQueries({ queryKey: qk.notifications });
   });
+  // One step of several approved: it moves on to the next approvers.
+  useRealtimeEvent<Payload>(channel, "expense.advanced", () => {
+    void queryClient.invalidateQueries({ queryKey: qk.approvals(workspaceId) });
+    void queryClient.invalidateQueries({ queryKey: qk.notifications });
+  });
   useRealtimeEvent<Payload>(channel, "expense.rejected", () => {
     void queryClient.invalidateQueries({ queryKey: qk.approvals(workspaceId) });
     void queryClient.invalidateQueries({ queryKey: qk.notifications });

@@ -20,10 +20,10 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | 2. Budgeting | 9 / 9 |
 | 3. Transactions and imports | 10 / 11 |
 | 4. Bills, subscriptions, savings and debt | 13 / 13 |
-| 5. Team expense management | 1 / 10 |
-| 6. Reports and analytics | 0 / 9 |
-| 7. Automations and integrations | 0 / 8 |
-| 8. Security, privacy and audit | 0 / 7 |
+| 5. Team expense management | 10 / 10 |
+| 6. Reports and analytics | 9 / 9 |
+| 7. Automations and integrations | 8 / 8 |
+| 8. Security, privacy and audit | 7 / 7 |
 | 9. Interface and platform | 0 / 9 |
 | 10. AI (needs an Anthropic API key) | 0 / 10 |
 
@@ -112,48 +112,48 @@ _Needs Phase 1 accounts._
 ## Phase 5 — Team expense management
 
 - [x] Custom roles and permissions per workspace (M) — done 2026-10-28
-- [ ] Multi-level conditional approvals (by amount, category, pool) (L)
-- [ ] Delegated approval while away, and a full approval audit history (M)
-- [ ] Employee reimbursement requests and payout tracking (M)
-- [ ] Category and merchant spending policies, receipt requirements and violation flags (M)
-- [ ] Department, team and project budgets (M)
-- [ ] Submission deadlines and escalation of late approvals (M)
-- [ ] Pool approval rules and spending limits per member (M)
-- [ ] Member contributions and allocations to pools (M)
-- [ ] Pool templates: trip, household, event, team (S)
+- [x] Multi-level conditional approvals (by amount, category, pool) (L) — done 2026-10-31
+- [x] Delegated approval while away, and a full approval audit history (M) — done 2026-10-31
+- [x] Employee reimbursement requests and payout tracking (M) — done 2026-10-31
+- [x] Category and merchant spending policies, receipt requirements and violation flags (M) — done 2026-10-31
+- [x] Department, team and project budgets (M) — done 2026-10-31
+- [x] Submission deadlines and escalation of late approvals (M) — done 2026-10-31
+- [x] Pool approval rules and spending limits per member (M) — done 2026-10-31
+- [x] Member contributions and allocations to pools (M) — done 2026-10-31
+- [x] Pool templates: trip, household, event, team (S) — done 2026-10-31
 
 ## Phase 6 — Reports and analytics
 
-- [ ] Cash-flow and income-versus-expense reports (M)
-- [ ] Category and merchant spending analysis (M)
-- [ ] Budget-versus-actual comparisons (M)
-- [ ] Monthly, quarterly and yearly trends (S)
-- [ ] Net worth and debt progress reports (needs Phases 1 and 4) (M)
-- [ ] Customizable dashboard widgets, and drill-down from any chart to its transactions (L)
-- [ ] Scheduled PDF, CSV and XLSX exports by email (M)
-- [ ] Anomaly, variance and savings analysis (rule-based; Phase 10 adds AI) (M)
-- [ ] Automatic FX rates from a rates provider, for multi-currency travel (M)
+- [x] Cash-flow and income-versus-expense reports (M) — done 2026-10-31
+- [x] Category and merchant spending analysis (M) — done 2026-10-31
+- [x] Budget-versus-actual comparisons (M) — done 2026-10-31
+- [x] Monthly, quarterly and yearly trends (S) — done 2026-10-31
+- [x] Net worth and debt progress reports (needs Phases 1 and 4) (M) — done 2026-10-31
+- [x] Customizable dashboard widgets, and drill-down from any chart to its transactions (L) — done 2026-10-31
+- [x] Scheduled PDF, CSV and XLSX exports by email (M) — done 2026-10-31
+- [x] Anomaly, variance and savings analysis (rule-based; Phase 10 adds AI) (M) — done 2026-10-31
+- [x] Automatic FX rates from a rates provider, for multi-currency travel (M) — done 2026-10-31
 
 ## Phase 7 — Automations and integrations
 
-- [ ] Category and merchant rules for incoming transactions (M)
-- [ ] Trigger-condition-action workflows (L)
-- [ ] Recurring budget and report automations (M)
-- [ ] Configurable reminder and notification flows, with thresholds (M)
-- [ ] Noirly Flow integration: bills and reminders as Flow tasks (M)
-- [ ] Google Calendar: bills and due dates on a calendar (M)
-- [ ] Email forwarding of receipts and bills to a workspace address (needs inbound email) (L)
-- [ ] Developer API with personal access tokens, and webhooks (built on `@noirly-dev/webhooks`, like Flow) (M)
+- [x] Category and merchant rules for incoming transactions (M) — done 2026-10-31
+- [x] Trigger-condition-action workflows (L) — done 2026-10-31
+- [x] Recurring budget and report automations (M) — done 2026-10-31
+- [x] Configurable reminder and notification flows, with thresholds (M) — done 2026-10-31
+- [x] Noirly Flow integration: bills and reminders as Flow tasks (M) — done 2026-10-31
+- [x] Google Calendar: bills and due dates on a calendar (M) — done 2026-10-31
+- [x] Email forwarding of receipts and bills to a workspace address (needs inbound email) (L) — done 2026-10-31
+- [x] Developer API with personal access tokens, and webhooks (built on `@noirly-dev/webhooks`, like Flow) (M) — done 2026-10-31
 
 ## Phase 8 — Security, privacy and audit
 
-- [ ] Immutable financial activity audit history (M)
-- [ ] Workspace isolation review and finer RBAC (S)
-- [ ] Sensitive-data minimization and field encryption for account numbers and notes (M)
-- [ ] Full data export (JSON) and scheduled backups, like Flow (M)
-- [ ] Retention and deletion controls (S)
-- [ ] Two-person approval for sensitive actions (deleting a workspace, changing approvers) (M)
-- [ ] Reconciliation reports and backup restore (M)
+- [x] Immutable financial activity audit history (M) — done 2026-10-31
+- [x] Workspace isolation review and finer RBAC (S) — done 2026-10-31
+- [x] Sensitive-data minimization and field encryption for account numbers and notes (M) — done 2026-10-31
+- [x] Full data export (JSON) and scheduled backups, like Flow (M) — done 2026-10-31
+- [x] Retention and deletion controls (S) — done 2026-10-31
+- [x] Two-person approval for sensitive actions (deleting a workspace, changing approvers) (M) — done 2026-10-31
+- [x] Reconciliation reports and backup restore (M) — done 2026-10-31
 
 ## Phase 9 — Interface and platform
 

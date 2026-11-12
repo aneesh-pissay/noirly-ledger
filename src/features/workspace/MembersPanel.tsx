@@ -15,9 +15,12 @@ type Props = {
   workspaceId: string;
   currentUserId: string;
   canManage: boolean;
+  /** May invite people as members (approvers take managing members). */
+  canInvite: boolean;
 };
 
-export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
+export function MembersPanel({ workspaceId, currentUserId, canManage, canInvite }: Props) {
+  const inviteRoles = canManage ? INVITE_ROLES : INVITE_ROLES.filter((r) => r === "member");
   const queryClient = useQueryClient();
   const [inviteRole, setInviteRole] =
     useState<Exclude<MemberRole, "owner">>("member");
@@ -49,7 +52,11 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error) => {
+      setError(err.message);
+      // Held for a second owner: it shows among the requests.
+      void queryClient.invalidateQueries({ queryKey: ["pending-actions", workspaceId] });
+    },
   });
 
   const removeMutation = useMutation({
@@ -57,7 +64,11 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: qk.members(workspaceId) });
     },
-    onError: (err: Error) => setError(err.message),
+    onError: (err: Error) => {
+      setError(err.message);
+      // Held for a second owner: it shows among the requests.
+      void queryClient.invalidateQueries({ queryKey: ["pending-actions", workspaceId] });
+    },
   });
 
   const members = membersQuery.data?.members ?? [];
@@ -74,7 +85,7 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      {canManage ? (
+      {canManage || canInvite ? (
         <section className="surface grain rounded-[var(--r-lg)] p-4">
           <h2 className="text-sm font-medium text-[var(--foreground)]">Invite link</h2>
           <p className="mt-1 text-xs text-[var(--muted-foreground)]">
@@ -88,7 +99,7 @@ export function MembersPanel({ workspaceId, currentUserId, canManage }: Props) {
               }
               className="h-10 rounded-lg border border-[var(--hairline)] bg-[var(--surface-2)] px-2 text-sm text-[var(--foreground)]"
             >
-              {INVITE_ROLES.map((role) => (
+              {inviteRoles.map((role) => (
                 <option key={role} value={role}>
                   {role}
                 </option>

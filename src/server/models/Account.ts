@@ -23,6 +23,9 @@ const accountSchema = new Schema(
     openingBalanceMinor: { type: Number, required: true, default: 0 },
     openingDate: { type: Date, required: true },
     institution: { type: String, default: null, trim: true, maxlength: 80 },
+    // The account or card number, sealed (src/server/security/field-crypto.ts); only its last four are shown.
+    numberSealed: { type: String, default: null, select: false },
+    numberLast4: { type: String, default: null },
     archivedAt: { type: Date, default: null },
     // The last statement it was reconciled to: the day it ran through and its balance then.
     reconciledThrough: { type: Date, default: null },

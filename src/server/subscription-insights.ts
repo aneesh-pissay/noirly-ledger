@@ -108,7 +108,7 @@ export function markStillUsed(userId: string, ruleId: string) {
     const rule = await TransactionModel.findOne({ _id: oid(ruleId), deletedAt: null, isRecurring: true, recurringParentId: null });
     if (!rule) throw new ApiError(404, "not_found", "Recurring bill not found");
     const role = await requireMembershipRole(userId, String(rule.workspaceId));
-    if (String(rule.createdById) !== userId && !can(role, "workspace.manage")) throw new ApiError(403, "forbidden", "You can only check on bills you added");
+    if (String(rule.createdById) !== userId && !can(role, "transaction.manage")) throw new ApiError(403, "forbidden", "You can only check on bills you added");
     rule.reviewedOn = today();
     await rule.save();
     return { reviewedOn: rule.reviewedOn };

@@ -38,6 +38,49 @@ const workspaceSchema = new Schema(
     purpose: { type: String, enum: WORKSPACE_PURPOSES, default: "team" },
     // When envelope budgeting started; null until it's turned on (see src/server/envelopes.ts).
     envelopesSince: { type: Date, default: null },
+    // Fetch exchange rates from the rates provider (src/server/fx-auto.ts); off means hand-set only.
+    autoFxRates: { type: Boolean, default: false },
+    // Shared workspaces: when expenses must be submitted, and when waiting approvals are chased (see src/core/deadlines.ts).
+    approvalDeadlines: {
+      type: new Schema(
+        {
+          submitWithinDays: { type: Number, default: null },
+          monthCloseDay: { type: Number, default: null },
+          lateSubmission: { type: String, enum: ["flag", "block"], default: "flag" },
+          remindAfterDays: { type: Number, default: null },
+          escalateAfterDays: { type: Number, default: null },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
+    // Shared workspaces: sensitive changes take a second owner (src/core/dual-control.ts).
+    dualControl: { type: Boolean, default: false },
+    // How long what's no longer used is kept (src/core/retention.ts); null for each rule means for good.
+    retention: {
+      type: new Schema(
+        {
+          deletedTransactionsDays: { type: Number, default: null },
+          unmatchedReceiptsDays: { type: Number, default: null },
+          notificationsDays: { type: Number, default: null },
+          lastRunAt: { type: Date, default: null },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
+    // Scheduled backups (src/server/backups.ts).
+    backup: {
+      type: new Schema(
+        {
+          enabled: { type: Boolean, default: false },
+          frequency: { type: String, enum: ["daily", "weekly"], default: "weekly" },
+          lastRunAt: { type: Date, default: null },
+        },
+        { _id: false },
+      ),
+      default: null,
+    },
   },
   { timestamps: true },
 );

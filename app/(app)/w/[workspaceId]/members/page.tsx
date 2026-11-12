@@ -1,6 +1,7 @@
 import { PageContainer } from "@noirly-dev/ui";
 import { can } from "@/src/core/permissions/can";
 import { MembersPanel } from "@/src/features/workspace/MembersPanel";
+import { DualControlPanel } from "@/src/features/workspace/DualControlPanel";
 import { getLedgerProvider } from "@/src/server/api/http";
 
 export default async function MembersPage({
@@ -19,10 +20,14 @@ export default async function MembersPage({
         Roles: owner, approver, member. Members can submit; approvers decide.
       </p>
       <div className="mt-6">
+        <DualControlPanel workspaceId={workspaceId} />
+      </div>
+      <div className="mt-6">
         <MembersPanel
           workspaceId={workspaceId}
           currentUserId={ctx.userId}
-          canManage={can(workspace.role, "members.manage")}
+          canManage={can(workspace.grant, "members.manage")}
+          canInvite={can(workspace.grant, "members.invite")}
         />
       </div>
     </PageContainer>

@@ -21,6 +21,7 @@ export function createInputFromBody(workspaceId: string, body: z.infer<typeof cr
     tags: body.tags,
     merchant: body.merchant,
     projectId: body.projectId ?? null,
+    departmentId: body.departmentId ?? null,
     splits: body.splits ? body.splits.map((line) => ({ categoryId: line.categoryId, amountMinor: parseMajorToMinor(line.amountMajor), note: line.note ?? null })) : null,
     toAmountMinor: body.toAmountMajor ? parseMajorToMinor(body.toAmountMajor) : null,
     date: body.date,

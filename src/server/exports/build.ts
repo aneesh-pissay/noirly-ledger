@@ -15,6 +15,7 @@ import {
   type CsvTransactionRow,
 } from "@/src/server/exports/csv";
 import { renderSummaryPdf, type PdfSummary } from "@/src/server/exports/pdf";
+import { writeXlsx, XLSX_TYPE } from "@/src/server/exports/xlsx-write";
 import { spendSign } from "@/src/core/refunds";
 import { PATH_SEPARATOR } from "@/src/core/categories";
 import type { TransactionType } from "@/src/core/models/enums";
@@ -100,6 +101,36 @@ export async function buildCsvExport(query: ExportQuery): Promise<string> {
     const rows = await loadRows(query);
     return [CSV_HEADER, ...rows.map(transactionToCsvRow)].join("\n") + "\n";
   });
+}
+
+/** The same rows as the CSV, as a spreadsheet: amounts are numbers (major units), so they add up in Excel. */
+export async function buildXlsxExport(query: ExportQuery): Promise<Buffer> {
+  return withDb(async () => {
+    const rows = await loadRows(query);
+    const header = ["date", "type", "amount", "currency", "base_amount", "category", "pool", "note", "status", "created_by", "merchant", "tags", "project", "gst_rate", "taxable_value", "cgst", "sgst", "igst", "gstin", "hsn_sac"];
+    const major = (minor: number) => minor / 100;
+    return writeXlsx(`Ledger ${query.from} to ${query.to}`, [
+      header,
+      ...rows.map((r) => [
+        r.date, r.type, major(r.amountMinor), r.currency, major(r.baseAmountMinor), r.category, r.pool, r.note, r.status, r.createdBy, r.merchant, r.tags, r.project,
+        r.gst ? r.gst.ratePct : null,
+        r.gst ? major(r.gst.taxableMinor) : null,
+        r.gst ? major(r.gst.cgstMinor) : null,
+        r.gst ? major(r.gst.sgstMinor) : null,
+        r.gst ? major(r.gst.igstMinor) : null,
+        r.gst?.gstin ?? null,
+        r.gst?.hsn ?? null,
+      ]),
+    ]);
+  });
+}
+
+/** An export as a file: its name, type and bytes. */
+export async function buildExportFile(query: ExportQuery, format: "csv" | "pdf" | "xlsx", workspaceName: string, baseCurrency: string) {
+  const stamp = `${query.from}_${query.to}`;
+  if (format === "csv") return { filename: `ledger-${stamp}.csv`, contentType: "text/csv; charset=utf-8", content: Buffer.from(await buildCsvExport(query), "utf8") };
+  if (format === "xlsx") return { filename: `ledger-${stamp}.xlsx`, contentType: XLSX_TYPE, content: await buildXlsxExport(query) };
+  return { filename: `ledger-${stamp}.pdf`, contentType: "application/pdf", content: Buffer.from(await buildPdfExport(query, workspaceName, baseCurrency)) };
 }
 
 export async function buildPdfExport(

@@ -5,22 +5,29 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, type ReactNode } from "react";
 import {
   BarChart3,
+  Building2,
   CheckCheck,
   ClipboardList,
   Briefcase,
   FolderKanban,
   Goal,
+  BookOpen,
+  HandCoins,
   LineChart,
+  CalendarClock,
   LayoutDashboard,
   Mail,
   Plus,
   Landmark,
   Receipt,
   Repeat,
+  ScrollText,
   Settings,
   Tags,
   Users,
   Wallet,
+  Workflow,
+  Zap,
 } from "lucide-react";
 import {
   Avatar,
@@ -40,6 +47,7 @@ import { ThemeControls } from "@/src/components/ThemeControls";
 import { NumberFormatProvider } from "@/src/components/NumberFormatProvider";
 import { PURPOSE_LABEL, PURPOSE_SECTIONS, poolsLabel, type WorkspacePurpose, type WorkspaceSection } from "@/src/core/workspace-purpose";
 import type { NumberFormat } from "@/src/core/locale-format";
+import { AppSwitcher } from "@/src/components/AppSwitcher";
 import { useUIStore, useWorkspaceStore } from "@/src/stores/ui-store";
 import type { WorkspaceWithRole } from "@/src/core/sync/types";
 import { can } from "@/src/core/permissions/can";
@@ -108,6 +116,8 @@ export function AppShell({ user, workspaces, children }: Props) {
         goals: { href: `${base}/goals`, label: "Goals", icon: Goal },
         expenses: { href: `${base}/expenses`, label: "Expenses", icon: ClipboardList },
         approvals: { href: `${base}/approvals`, label: "Approvals", icon: CheckCheck },
+        reimbursements: { href: `${base}/reimbursements`, label: "Reimbursements", icon: HandCoins },
+        departments: { href: `${base}/departments`, label: "Departments", icon: Building2 },
       };
       const money: AppNavItem[] = PURPOSE_SECTIONS[purpose]
         .filter((section) => section !== "approvals" || can(teamRole, "expense.decide"))
@@ -120,8 +130,14 @@ export function AppShell({ user, workspaces, children }: Props) {
           label: "Workspace",
           items: [
             { href: `${base}/members`, label: "Members", icon: Users },
+            // Rules fill in transactions, so only where the workspace keeps its own.
+            ...(PURPOSE_SECTIONS[purpose].includes("transactions") ? [{ href: `${base}/rules`, label: "Rules", icon: Zap }] : []),
+            { href: `${base}/workflows`, label: "Workflows", icon: Workflow },
+            { href: `${base}/automations`, label: "Automations", icon: CalendarClock },
             { href: `${base}/reports`, label: "Reports", icon: BarChart3 },
+            { href: `${base}/audit`, label: "Audit history", icon: ScrollText },
             { href: "/settings", label: "Settings", icon: Settings },
+            { href: "/docs", label: "Docs", icon: BookOpen },
           ],
         },
       ];
@@ -145,11 +161,15 @@ export function AppShell({ user, workspaces, children }: Props) {
           { href: "/goals", label: "Goals", icon: Goal },
           { href: "/forecast", label: "Forecast", icon: LineChart },
           { href: "/categories", label: "Categories", icon: Tags },
+          { href: "/rules", label: "Rules", icon: Zap },
+          { href: "/workflows", label: "Workflows", icon: Workflow },
+          { href: "/automations", label: "Automations", icon: CalendarClock },
           { href: "/projects", label: "Projects", icon: Briefcase },
           { href: "/reports", label: "Reports", icon: BarChart3 },
+          { href: "/audit", label: "Audit history", icon: ScrollText },
         ],
       },
-      { label: "Workspace", items: [{ href: "/settings", label: "Settings", icon: Settings }] },
+      { label: "Workspace", items: [{ href: "/settings", label: "Settings", icon: Settings }, { href: "/docs", label: "Docs", icon: BookOpen }] },
     ];
   }, [activeWorkspaceId, pathname, teamRole, teams]);
 
@@ -244,6 +264,7 @@ export function AppShell({ user, workspaces, children }: Props) {
               >
                 <Plus size={16} />
               </button>
+              <AppSwitcher current="ledger" />
               <ThemeControls size="sm" />
               <NotificationBell />
               <Avatar name={user.displayName} />

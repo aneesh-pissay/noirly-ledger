@@ -9,6 +9,7 @@ import { qk } from "@/src/core/sync/query-keys";
 import { formatMinorToMajor } from "@/src/core/money";
 import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import type { InboxReceipt } from "@/src/core/sync/types";
+import { EmailInSection } from "@/src/features/receipts/EmailInSection";
 
 type Props = { workspaceId: string; transactionsPath: string };
 
@@ -152,6 +153,7 @@ export function ReceiptInboxScreen({ workspaceId, transactionsPath }: Props) {
       </div>
       {error ? <p role="alert" className="mt-3 text-sm text-[var(--balance-negative)]">{error}</p> : null}
       {message ? <p role="status" className="mt-3 text-sm">{message}</p> : null}
+      <EmailInSection workspaceId={workspaceId} />
 
       <section aria-label="To match" className="mt-6">
         <h2 className="text-sm font-medium">To match ({open.length})</h2>

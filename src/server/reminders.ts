@@ -7,6 +7,7 @@ import type { ScheduledPaymentDocument } from "@/src/server/models/ScheduledPaym
 import type { TransactionDocument } from "@/src/server/models/Transaction";
 import { requireMembershipRole } from "@/src/server/workspace/members";
 import { notifyUsers } from "@/src/server/notifications/notify";
+import { prefsFor } from "@/src/server/notification-prefs";
 import { can } from "@/src/core/permissions/can";
 import { dueOccurrences } from "@/src/core/recurrence/next";
 import { formatMoney } from "@/src/core/locale-format";
@@ -80,10 +81,21 @@ export function runBillReminders(asOf = new Date()): Promise<{ reminders: number
     const links = new Map(workspaces.map((w) => [String(w._id), w.kind === "personal" ? "/recurring" : `/w/${w._id}/transactions`]));
     const nameOf = (t: TransactionDocument) => t.merchant ?? t.note ?? (t.categoryId ? categories.get(String(t.categoryId)) : undefined) ?? "A bill";
 
+    // Bills without their own notice use what whoever set them up chose for the workspace.
+    const notices = new Map<string, ReminderSettings>();
+    const noticeOf = async (doc: Pick<Remindable, "workspaceId" | "createdById">): Promise<ReminderSettings> => {
+      const key = `${doc.createdById}:${doc.workspaceId}`;
+      if (!notices.has(key)) {
+        const prefs = (await prefsFor([String(doc.createdById)], String(doc.workspaceId))).get(String(doc.createdById))!;
+        notices.set(key, { daysBefore: prefs.billDaysBefore, trialEndsOn: null, cancelBy: null });
+      }
+      return notices.get(key)!;
+    };
+
     let sent = 0;
     for (const rule of rules) {
       const recurrence = rule.recurrence!;
-      const settings = settingsOf(rule);
+      const settings = settingsOf(rule) ?? (await noticeOf(rule));
       const charges = dueOccurrences(
         lastPosted.get(String(rule._id)) ?? rule.date,
         {
@@ -107,7 +119,7 @@ export function runBillReminders(asOf = new Date()): Promise<{ reminders: number
     // Bills paid by hand: notice before the due date, and one note when it's overdue.
     for (const payment of payments) {
       const overdue = overdueReminder(payment.dueDate, today);
-      const reminders = [...remindersFor({ date: payment.dueDate, frequency: null }, null, today), ...(overdue ? [overdue] : [])];
+      const reminders = [...remindersFor({ date: payment.dueDate, frequency: null }, await noticeOf(payment), today), ...(overdue ? [overdue] : [])];
       for (const reminder of reminders) if (await send(payment, String(payment._id), reminder, payment.name, today, links)) sent++;
     }
     // Card bills: notice before the due date while something's left, and one note if it's missed.
@@ -118,13 +130,13 @@ export function runBillReminders(asOf = new Date()): Promise<{ reminders: number
         const bill = card.bill;
         if (!bill || bill.leftMinor === 0) continue;
         const overdue = bill.status === "overdue" ? overdueReminder(bill.dueDate, today) : null;
-        const reminders = [...remindersFor({ date: bill.dueDate, frequency: null }, null, today), ...(overdue ? [overdue] : [])];
         const remindable = { workspaceId, createdById: owners.get(card.accountId)!, amountMinor: bill.leftMinor, currency: card.currency };
+        const reminders = [...remindersFor({ date: bill.dueDate, frequency: null }, await noticeOf(remindable), today), ...(overdue ? [overdue] : [])];
         for (const reminder of reminders) if (await send(remindable, `card:${card.accountId}`, reminder, `${card.name} bill`, today, links)) sent++;
       }
     }
     for (const doc of ahead) {
-      for (const reminder of remindersFor({ date: doc.date.toISOString().slice(0, 10), frequency: null }, null, today)) {
+      for (const reminder of remindersFor({ date: doc.date.toISOString().slice(0, 10), frequency: null }, await noticeOf(doc), today)) {
         if (await send(doc, String(doc._id), reminder, nameOf(doc), today, links)) sent++;
       }
     }
@@ -139,7 +151,7 @@ export function setReminders(userId: string, ruleId: string, settings: ReminderS
     const rule = await TransactionModel.findOne({ _id: new Types.ObjectId(ruleId), deletedAt: null });
     if (!rule) throw new ApiError(404, "not_found", "Transaction not found");
     const role = await requireMembershipRole(userId, String(rule.workspaceId));
-    if (String(rule.createdById) !== userId && !can(role, "workspace.manage")) throw new ApiError(403, "forbidden", "You can only set reminders on bills you added");
+    if (String(rule.createdById) !== userId && !can(role, "transaction.manage")) throw new ApiError(403, "forbidden", "You can only set reminders on bills you added");
     if (!rule.isRecurring || rule.recurringParentId || !rule.recurrence) throw new ApiError(400, "invalid_request", "Reminders are set on a recurring rule");
     rule.set("reminders", settings);
     await rule.save();

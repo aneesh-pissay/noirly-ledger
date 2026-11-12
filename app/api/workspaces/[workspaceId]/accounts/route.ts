@@ -34,6 +34,7 @@ export async function POST(
       openingBalanceMinor: parseMajorToMinor(body.openingMajor),
       openingDate: body.openingDate,
       institution: body.institution ?? null,
+      number: body.number ?? null,
     });
     return jsonOk({ account }, 201);
   } catch (error) {

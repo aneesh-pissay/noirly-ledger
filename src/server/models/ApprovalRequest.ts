@@ -47,6 +47,37 @@ const approvalRequestSchema = new Schema(
       default: null,
     },
     reviewNote: { type: String, default: null },
+    // The chain this expense needs, copied from the matching rule when it
+    // was submitted (src/core/approval-rules.ts). Empty on requests from
+    // before multi-level approvals: one step any approver decides.
+    steps: {
+      type: [
+        new Schema(
+          {
+            kind: { type: String, required: true },
+            userIds: { type: [Schema.Types.ObjectId], default: [] },
+            decision: { type: String, enum: ["approved", "rejected", null], default: null },
+            decidedById: { type: Schema.Types.ObjectId, ref: "LedgerUser", default: null },
+            onBehalfOfId: { type: Schema.Types.ObjectId, ref: "LedgerUser", default: null },
+            decidedAt: { type: Date, default: null },
+            note: { type: String, default: null },
+            // Waiting times (src/core/deadlines.ts): when it became current, and when it was chased.
+            startedAt: { type: Date, default: null },
+            remindedAt: { type: Date, default: null },
+            escalatedAt: { type: Date, default: null },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    currentStep: { type: Number, default: 0 },
+    ruleName: { type: String, default: null },
+    // Submitted after the workspace's deadline, flagged for approvers.
+    lateSubmission: {
+      type: new Schema({ deadline: String, daysLate: Number }, { _id: false }),
+      default: null,
+    },
     submittedAt: { type: Date, default: null },
     reviewedAt: { type: Date, default: null },
   },

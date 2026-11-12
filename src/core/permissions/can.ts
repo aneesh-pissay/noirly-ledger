@@ -8,8 +8,13 @@ export const PERMISSIONS = [
   "budget.manage",
   "expense.submit",
   "expense.decide",
+  "reimbursement.pay",
   "report.export",
   "fx.manage",
+  "audit.view",
+  "transaction.manage",
+  "members.invite",
+  "integrations.manage",
 ] as const;
 
 export type PermissionAction = (typeof PERMISSIONS)[number];
@@ -31,8 +36,13 @@ export const PERMISSION_LABEL: Record<PermissionAction, string> = {
   "budget.manage": "Manage budgets, categories and accounts",
   "expense.submit": "Add and submit expenses",
   "expense.decide": "Approve or reject expenses",
+  "reimbursement.pay": "Pay back reimbursements",
   "report.export": "Export reports",
   "fx.manage": "Set exchange rates",
+  "audit.view": "See the audit history",
+  "transaction.manage": "Change or delete anyone's transactions",
+  "members.invite": "Invite people as members",
+  "integrations.manage": "Manage webhooks and the workspace's email address",
 };
 
 const rank: Record<MemberRole, number> = {
@@ -49,7 +59,14 @@ const requiredRank: Record<PermissionAction, number> = {
   /** Categories and category budgets shape everyone's reports. */
   "budget.manage": 2,
   "expense.decide": 2,
+  "reimbursement.pay": 2,
   "fx.manage": 2,
+  /** Who did what with the money: approvers and owners, or a custom role given it (an auditor). */
+  "audit.view": 2,
+  /** Owners, as before; a custom role (a bookkeeper) can be given them. */
+  "transaction.manage": 3,
+  "members.invite": 3,
+  "integrations.manage": 3,
   "workspace.manage": 3,
   "members.manage": 3,
 };

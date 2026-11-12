@@ -5,7 +5,7 @@ import type { BudgetPeriod } from "@/src/core/models/enums";
  * created, edited, had money moved in or out, was set by a template, was
  * restored to an earlier limit, or was deleted.
  */
-export const REVISION_REASONS = ["created", "edited", "moved_in", "moved_out", "template", "restored", "deleted"] as const;
+export const REVISION_REASONS = ["created", "edited", "moved_in", "moved_out", "template", "restored", "deleted", "automated"] as const;
 export type RevisionReason = (typeof REVISION_REASONS)[number];
 
 export const REVISION_LABEL: Record<RevisionReason, string> = {
@@ -16,6 +16,7 @@ export const REVISION_LABEL: Record<RevisionReason, string> = {
   template: "Set by a template",
   restored: "Restored",
   deleted: "Deleted",
+  automated: "Set by an automation",
 };
 
 /**

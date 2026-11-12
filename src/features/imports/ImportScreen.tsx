@@ -247,7 +247,14 @@ export function ImportScreen({ workspaceId, baseCurrency, transactionsPath }: Pr
                       </td>
                       <td className="px-3 py-1.5 font-mono text-xs text-[var(--muted-foreground)]">{row.line}</td>
                       <td className="px-3 py-1.5 font-mono text-xs">{row.date ?? "—"}</td>
-                      <td className="max-w-[20rem] truncate px-3 py-1.5">{row.description || "—"}</td>
+                      <td className="max-w-[20rem] truncate px-3 py-1.5">
+                        {row.description || "—"}
+                        {row.rule ? (
+                          <span data-rule-match className="block text-[11px] text-[var(--accent)]" title={`Rules: ${row.rule.names.join(", ")}`}>
+                            → {[row.rule.merchant, categories.data?.categories.find((c) => c.id === row.rule!.categoryId)?.name].filter(Boolean).join(" · ") || row.rule.names.join(", ")}
+                          </span>
+                        ) : null}
+                      </td>
                       <td className={`px-3 py-1.5 text-right font-mono tabular-nums ${row.amountMinor != null && row.amountMinor > 0 ? "text-[var(--balance-positive)]" : ""}`}>
                         {row.amountMinor == null ? "—" : money(row.amountMinor, currency)}
                       </td>

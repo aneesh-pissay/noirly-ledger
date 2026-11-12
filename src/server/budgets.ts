@@ -11,7 +11,7 @@ import { carriedIn, finishedPeriods, type RolloverMode } from "@/src/core/budget
  * Spending (expenses less refunds) per day in base currency across some
  * categories, split lines counted in their own categories, between two dates.
  */
-async function spentByDay(workspaceId: Types.ObjectId, categoryIds: Types.ObjectId[], from: Date, to: Date) {
+export async function spentByDay(workspaceId: Types.ObjectId, categoryIds: Types.ObjectId[], from: Date, to: Date) {
   const rows = await TransactionModel.aggregate<{ _id: string; total: number }>([
     {
       $match: {

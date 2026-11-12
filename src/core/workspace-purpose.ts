@@ -23,12 +23,12 @@ export const PURPOSE_DESCRIPTION: Record<WorkspacePurpose, string> = {
 };
 
 /** The pages a shared workspace shows, in the order of its menu. */
-export type WorkspaceSection = "transactions" | "accounts" | "budgets" | "pools" | "goals" | "expenses" | "approvals";
+export type WorkspaceSection = "transactions" | "accounts" | "budgets" | "pools" | "goals" | "expenses" | "approvals" | "reimbursements" | "departments";
 
 export const PURPOSE_SECTIONS: Record<WorkspacePurpose, WorkspaceSection[]> = {
-  team: ["pools", "expenses", "approvals"],
+  team: ["pools", "expenses", "approvals", "reimbursements", "departments"],
   household: ["transactions", "accounts", "budgets", "pools", "goals"],
-  business: ["transactions", "accounts", "budgets", "expenses", "approvals", "pools"],
+  business: ["transactions", "accounts", "budgets", "expenses", "approvals", "reimbursements", "pools", "departments"],
 };
 
 export function hasSection(purpose: WorkspacePurpose, section: WorkspaceSection) {
