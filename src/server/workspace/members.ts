@@ -6,10 +6,14 @@ import {
   Workspace,
   WorkspaceInvite,
   WorkspaceMember,
+  WorkspaceRole,
 } from "@/src/server/models";
 import { ApiError } from "@/src/server/api/http";
-import { can, type PermissionAction } from "@/src/core/permissions/can";
+import { can, customRolePermissions, roleOf, type Grant, type PermissionAction } from "@/src/core/permissions/can";
 import type { MemberRole } from "@/src/core/models/enums";
+import { appendAudit } from "@/src/server/audit";
+import { requireSecondOwner, type SecondApproval } from "@/src/server/dual-control";
+import { isSensitiveRemoval, isSensitiveRoleChange } from "@/src/core/dual-control";
 
 function oid(id: string) {
   return new Types.ObjectId(id);
@@ -24,9 +28,23 @@ export type MemberView = {
   email: string;
   displayName: string;
   role: MemberRole;
+  customRoleId: string | null;
+  customRoleName: string | null;
 };
 
-export async function requireMembershipRole(userId: string, workspaceId: string) {
+/**
+ * What a membership may do: its custom role's permissions when it has one
+ * (an owner keeps everything), else its built-in role.
+ */
+export async function grantFor(membership: { role: string; customRoleId?: Types.ObjectId | null }): Promise<Grant> {
+  const role = membership.role as MemberRole;
+  if (!membership.customRoleId || role === "owner") return role;
+  const custom = await WorkspaceRole.findById(membership.customRoleId).select("permissions").lean();
+  // A role since deleted leaves the member on their built-in role.
+  return custom ? { role, permissions: customRolePermissions(custom.permissions) } : role;
+}
+
+export async function requireMembershipRole(userId: string, workspaceId: string): Promise<Grant> {
   const membership = await WorkspaceMember.findOne({
     workspaceId: oid(workspaceId),
     userId: oid(userId),
@@ -34,14 +52,14 @@ export async function requireMembershipRole(userId: string, workspaceId: string)
   if (!membership) {
     throw new ApiError(403, "forbidden", "Not a member of this workspace");
   }
-  return membership.role as MemberRole;
+  return grantFor(membership);
 }
 
 export async function requireAction(
   userId: string,
   workspaceId: string,
   action: PermissionAction,
-): Promise<MemberRole> {
+): Promise<Grant> {
   const role = await requireMembershipRole(userId, workspaceId);
   if (!can(role, action)) {
     throw new ApiError(403, "forbidden", "Insufficient permissions");
@@ -57,13 +75,17 @@ export async function listMembers(workspaceId: string): Promise<MemberView[]> {
     _id: { $in: memberships.map((m) => m.userId) },
   }).lean();
   const byId = new Map(users.map((user) => [user._id.toString(), user]));
+  const roles = new Map((await WorkspaceRole.find({ workspaceId: oid(workspaceId) }).select("name").lean()).map((r) => [String(r._id), r.name]));
   return memberships.map((membership) => {
     const user = byId.get(membership.userId.toString());
+    const customRoleId = membership.customRoleId && roles.has(String(membership.customRoleId)) ? String(membership.customRoleId) : null;
     return {
       userId: membership.userId.toString(),
       email: user?.email ?? "",
       displayName: user?.displayName ?? "Unknown",
       role: membership.role as MemberRole,
+      customRoleId,
+      customRoleName: customRoleId ? roles.get(customRoleId)! : null,
     };
   });
 }
@@ -74,7 +96,8 @@ export async function createInvite(input: {
   role: Exclude<MemberRole, "owner">;
 }) {
   return withDb(async () => {
-    await requireAction(input.userId, input.workspaceId, "members.manage");
+    // Inviting someone as a member can be handed out; inviting an approver is managing members.
+    await requireAction(input.userId, input.workspaceId, input.role === "member" ? "members.invite" : "members.manage");
     const token = randomBytes(24).toString("base64url");
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -111,6 +134,15 @@ export async function acceptInvite(userId: string, token: string) {
         userId: oid(userId),
         role: invite.role,
       });
+      await appendAudit({
+        workspaceId: invite.workspaceId,
+        actorId: userId,
+        action: "member.joined",
+        entity: "member",
+        entityId: userId,
+        summary: `${await displayNameOf(userId)} joined as ${invite.role}`,
+        data: { role: invite.role, inviteId: invite._id },
+      });
     }
     invite.usedAt = new Date();
     await invite.save();
@@ -127,13 +159,17 @@ export async function updateMemberRole(input: {
   workspaceId: string;
   targetUserId: string;
   role: MemberRole;
+  /** A custom role to give them, null to take it away; left out, it stays as it is. */
+  customRoleId?: string | null;
+  /** Set when a second owner agreed to it (src/server/dual-control.ts). */
+  approval?: SecondApproval;
 }) {
   return withDb(async () => {
-    const actorRole = await requireAction(
+    const actorRole = roleOf(await requireAction(
       input.actorId,
       input.workspaceId,
       "members.manage",
-    );
+    ));
     if (input.role === "owner" && actorRole !== "owner") {
       throw new ApiError(403, "forbidden", "Only the owner can assign owner");
     }
@@ -156,9 +192,39 @@ export async function updateMemberRole(input: {
         throw new ApiError(400, "invalid_request", "Keep at least one owner");
       }
     }
+    const previousRole = membership.role;
+    // Who decides is the workspace's to agree on: with two-person approval on, a second owner.
+    if (isSensitiveRoleChange({ from: previousRole as MemberRole, to: input.role, fromCustomRoleId: membership.customRoleId ? String(membership.customRoleId) : null, toCustomRoleId: input.role === "owner" ? null : input.customRoleId })) {
+      await requireSecondOwner({
+        actorId: input.actorId,
+        workspaceId: input.workspaceId,
+        kind: "member.role",
+        payload: { targetUserId: input.targetUserId, role: input.role, ...(input.customRoleId !== undefined ? { customRoleId: input.customRoleId } : {}) },
+        summary: `Make ${await displayNameOf(input.targetUserId)} ${input.role}${input.customRoleId ? " with a custom role" : ""} (now ${previousRole})`,
+        approval: input.approval,
+      });
+    }
     membership.role = input.role;
+    if (input.role === "owner") {
+      // An owner can do everything; a custom role would only narrow that.
+      membership.customRoleId = null;
+    } else if (input.customRoleId !== undefined) {
+      if (input.customRoleId && !(await WorkspaceRole.exists({ _id: oid(input.customRoleId), workspaceId: oid(input.workspaceId) }))) {
+        throw new ApiError(400, "invalid_request", "That role isn't in this workspace");
+      }
+      membership.customRoleId = input.customRoleId ? oid(input.customRoleId) : null;
+    }
     await membership.save();
-    return { userId: input.targetUserId, role: input.role };
+    await appendAudit({
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      action: "member.role_changed",
+      entity: "member",
+      entityId: input.targetUserId,
+      summary: `${await displayNameOf(input.targetUserId)} is now ${input.role}${membership.customRoleId ? " with a custom role" : ""}`,
+      data: { role: input.role, previousRole, customRoleId: membership.customRoleId ? String(membership.customRoleId) : null },
+    });
+    return { userId: input.targetUserId, role: input.role, customRoleId: membership.customRoleId ? String(membership.customRoleId) : null };
   });
 }
 
@@ -166,6 +232,7 @@ export async function removeMember(input: {
   actorId: string;
   workspaceId: string;
   targetUserId: string;
+  approval?: SecondApproval;
 }) {
   return withDb(async () => {
     await requireAction(input.actorId, input.workspaceId, "members.manage");
@@ -185,6 +252,29 @@ export async function removeMember(input: {
         throw new ApiError(400, "invalid_request", "Keep at least one owner");
       }
     }
+    if (isSensitiveRemoval(membership.role as MemberRole)) {
+      await requireSecondOwner({
+        actorId: input.actorId,
+        workspaceId: input.workspaceId,
+        kind: "member.remove",
+        payload: { targetUserId: input.targetUserId },
+        summary: `Remove ${await displayNameOf(input.targetUserId)} (${membership.role})`,
+        approval: input.approval,
+      });
+    }
     await membership.deleteOne();
+    await appendAudit({
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      action: "member.removed",
+      entity: "member",
+      entityId: input.targetUserId,
+      summary: `${await displayNameOf(input.targetUserId)} was removed (was ${membership.role})`,
+      data: { role: membership.role },
+    });
   });
+}
+
+async function displayNameOf(userId: string) {
+  return (await LedgerUser.findById(oid(userId)).select("displayName").lean())?.displayName ?? "Someone";
 }

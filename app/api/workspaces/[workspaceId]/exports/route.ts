@@ -6,7 +6,7 @@ import {
 } from "@/src/server/api/http";
 import { exportBodySchema } from "@/src/core/schemas/ledger";
 import { requireAction } from "@/src/server/workspace/members";
-import { buildCsvExport, buildPdfExport } from "@/src/server/exports/build";
+import { buildExportFile } from "@/src/server/exports/build";
 
 export const runtime = "nodejs";
 
@@ -27,28 +27,16 @@ export async function POST(
     const { ctx, sync } = await getLedgerProvider();
     await requireAction(ctx.userId, workspaceId, "report.export");
     const workspace = await sync.getWorkspace(workspaceId);
-    const query = {
-      workspaceId,
-      from: body.from,
-      to: body.to,
-      budgetPoolId: body.budgetPoolId ?? null,
-      template: body.template,
-    };
-    const stamp = `${body.from}_${body.to}`;
-    if (body.format === "csv") {
-      const csv = await buildCsvExport(query);
-      return new Response(csv, {
-        headers: {
-          "content-type": "text/csv; charset=utf-8",
-          "content-disposition": `attachment; filename="ledger-${stamp}.csv"`,
-        },
-      });
-    }
-    const pdf = await buildPdfExport(query, workspace.name, workspace.baseCurrency);
-    return new Response(new Uint8Array(pdf), {
+    const file = await buildExportFile(
+      { workspaceId, from: body.from, to: body.to, budgetPoolId: body.budgetPoolId ?? null, template: body.template },
+      body.format,
+      workspace.name,
+      workspace.baseCurrency,
+    );
+    return new Response(new Uint8Array(file.content), {
       headers: {
-        "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="ledger-${stamp}.pdf"`,
+        "content-type": file.contentType,
+        "content-disposition": `attachment; filename="${file.filename}"`,
       },
     });
   } catch (error) {

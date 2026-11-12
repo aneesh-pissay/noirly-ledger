@@ -12,6 +12,12 @@ export type CsvTransactionRow = {
   note: string;
   status: string;
   createdBy: string;
+  merchant: string;
+  /** Space-separated. */
+  tags: string;
+  project: string;
+  /** GST, when the transaction has it; amounts in its currency. */
+  gst?: { ratePct: number; taxableMinor: number; cgstMinor: number; sgstMinor: number; igstMinor: number; gstin: string | null; hsn: string | null } | null;
 };
 
 export const CSV_HEADER = csvLine([
@@ -25,6 +31,16 @@ export const CSV_HEADER = csvLine([
   "note",
   "status",
   "created_by",
+  "merchant",
+  "tags",
+  "project",
+  "gst_rate",
+  "taxable_value",
+  "cgst",
+  "sgst",
+  "igst",
+  "gstin",
+  "hsn_sac",
 ]);
 
 export function transactionToCsvRow(row: CsvTransactionRow): string {
@@ -39,5 +55,15 @@ export function transactionToCsvRow(row: CsvTransactionRow): string {
     row.note,
     row.status,
     row.createdBy,
+    row.merchant,
+    row.tags,
+    row.project,
+    row.gst ? String(row.gst.ratePct) : "",
+    row.gst ? formatMinorToMajor(row.gst.taxableMinor) : "",
+    row.gst ? formatMinorToMajor(row.gst.cgstMinor) : "",
+    row.gst ? formatMinorToMajor(row.gst.sgstMinor) : "",
+    row.gst ? formatMinorToMajor(row.gst.igstMinor) : "",
+    row.gst?.gstin ?? "",
+    row.gst?.hsn ?? "",
   ]);
 }

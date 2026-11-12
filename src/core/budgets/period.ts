@@ -29,7 +29,17 @@ export function periodWindow(
   period: BudgetPeriod,
   at = new Date(),
   custom?: { start: string | null; end: string | null },
+  /** Month (1–12) the financial year starts in, for yearly budgets. */
+  fiscalYearStartMonth = 1,
 ): DateRange {
+  if (period === "yearly") {
+    const startYear = at.getUTCMonth() + 1 >= fiscalYearStartMonth ? at.getUTCFullYear() : at.getUTCFullYear() - 1;
+    return {
+      from: new Date(Date.UTC(startYear, fiscalYearStartMonth - 1, 1)),
+      to: new Date(Date.UTC(startYear + 1, fiscalYearStartMonth - 1, 0, 23, 59, 59, 999)),
+    };
+  }
+
   if (period === "custom") {
     const from = custom?.start ? startOfUtcDay(new Date(custom.start)) : startOfUtcDay(at);
     const to = custom?.end ? endOfUtcDay(new Date(custom.end)) : endOfUtcDay(at);
@@ -53,10 +63,16 @@ export function periodWindow(
 }
 
 export function dashboardRange(
-  preset: "7d" | "30d" | "90d" | "mtd",
+  preset: "7d" | "30d" | "90d" | "mtd" | "fy",
   at = new Date(),
+  fiscalYearStartMonth = 1,
 ): DateRange {
   const to = endOfUtcDay(at);
+  if (preset === "fy") {
+    // From the first day of the financial year that today falls in.
+    const startYear = at.getUTCMonth() + 1 >= fiscalYearStartMonth ? at.getUTCFullYear() : at.getUTCFullYear() - 1;
+    return { from: new Date(Date.UTC(startYear, fiscalYearStartMonth - 1, 1)), to };
+  }
   if (preset === "mtd") {
     return {
       from: new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), 1)),

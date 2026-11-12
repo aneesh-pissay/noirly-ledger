@@ -4,10 +4,12 @@ export type WorkspaceKind = (typeof WORKSPACE_KINDS)[number];
 export const MEMBER_ROLES = ["owner", "approver", "member"] as const;
 export type MemberRole = (typeof MEMBER_ROLES)[number];
 
-export const BUDGET_PERIODS = ["weekly", "monthly", "custom"] as const;
+// Yearly budgets run over the workspace's financial year.
+export const BUDGET_PERIODS = ["weekly", "monthly", "yearly", "custom"] as const;
 export type BudgetPeriod = (typeof BUDGET_PERIODS)[number];
 
-export const TRANSACTION_TYPES = ["expense", "income", "transfer"] as const;
+// A refund takes back part or all of one expense (refundOfId).
+export const TRANSACTION_TYPES = ["expense", "income", "transfer", "refund"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
 export const APPROVAL_STATUSES = [

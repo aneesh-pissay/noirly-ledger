@@ -19,6 +19,8 @@ const fxRateSchema = new Schema(
     /** Fixed-point: 1.0 = 100_000_000 */
     rateToBaseScaled: { type: Number, required: true },
     effectiveFrom: { type: Date, required: true },
+    /** Set by hand, or fetched from the rates provider (src/core/fx-provider.ts); a hand-set rate is never overwritten. */
+    source: { type: String, enum: ["user", "auto"], default: "user" },
     createdById: {
       type: Schema.Types.ObjectId,
       ref: "LedgerUser",

@@ -1,5 +1,7 @@
+"use client";
+
 import type { MoneyMinor } from "@/src/core/money";
-import { formatMinorToMajor } from "@/src/core/money";
+import { useMoneyFormat } from "@/src/components/NumberFormatProvider";
 import { cn } from "@/src/lib/cn";
 
 type Props = {
@@ -15,6 +17,7 @@ export function MoneyText({
   tone = "default",
   className,
 }: Props) {
+  const { money } = useMoneyFormat();
   return (
     <span
       className={cn(
@@ -24,7 +27,7 @@ export function MoneyText({
         className,
       )}
     >
-      {formatMinorToMajor(amountMinor)} {currency}
+      {money(amountMinor, currency)}
     </span>
   );
 }

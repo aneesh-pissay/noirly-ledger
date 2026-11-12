@@ -6,6 +6,10 @@ import { auth } from "@/auth";
 import { ensureLedgerAccount, type BootstrapSessionUser } from "@/src/server/auth/bootstrap";
 import { extractBearerToken, fetchIdentityUserInfo } from "@/src/server/auth/identity-userinfo";
 import { createMongoLedgerProvider } from "@/src/server/providers/mongo-ledger-provider";
+import { resolveAccessToken } from "@/src/server/access-tokens";
+import { scheduleWebhookSweep, withWebhooks } from "@/src/server/webhooks";
+import { isAccessToken } from "@/src/core/access-tokens";
+import type { NumberFormat } from "@/src/core/locale-format";
 
 export type LedgerSessionContext = {
   identitySub: string;
@@ -13,6 +17,9 @@ export type LedgerSessionContext = {
   email: string;
   displayName: string;
   baseCurrency: string;
+  numberFormat: NumberFormat;
+  /** How the request signed in: the web session, the mobile app's Identity token, or a personal access token. */
+  via: "session" | "identity" | "token";
 };
 
 export type PersonalWorkspaceSummary = {
@@ -21,6 +28,7 @@ export type PersonalWorkspaceSummary = {
   slug: string;
   kind: "personal";
   baseCurrency: string;
+  fiscalYearStartMonth: number;
 };
 
 /**
@@ -29,7 +37,8 @@ export type PersonalWorkspaceSummary = {
  * the user twice and listed workspaces twice before painting.
  */
 export const getLedgerProvider = cache(async () => {
-  const account = await ensureLedgerAccount(await requestUser());
+  const { user, via } = await requestUser();
+  const account = await ensureLedgerAccount(user);
 
   const ctx: LedgerSessionContext = {
     identitySub: account.user.identitySub,
@@ -37,21 +46,29 @@ export const getLedgerProvider = cache(async () => {
     email: account.user.email,
     displayName: account.user.displayName,
     baseCurrency: account.user.baseCurrency,
+    numberFormat: account.user.numberFormat,
+    via,
   };
+  // Webhook retries ride along on requests, a sweep every 30 seconds at most.
+  scheduleWebhookSweep();
 
   return {
     ctx,
-    sync: createMongoLedgerProvider({ userId: ctx.userId }),
+    sync: withWebhooks(createMongoLedgerProvider({ userId: ctx.userId })),
     personal: account.personalWorkspace as PersonalWorkspaceSummary,
   };
 });
 
 /**
  * Who is calling: the mobile app sends an Identity access token (Bearer),
- * the web app a session cookie. Both resolve to the same Ledger account.
+ * scripts a personal access token (Bearer nlp_…), the web app a session
+ * cookie. All resolve to the same Ledger account.
  */
-async function requestUser(): Promise<BootstrapSessionUser> {
+async function requestUser(): Promise<{ user: BootstrapSessionUser; via: LedgerSessionContext["via"] }> {
   const bearer = extractBearerToken((await headers()).get("authorization"));
+  if (bearer && isAccessToken(bearer)) {
+    return { user: (await resolveAccessToken(bearer)).user, via: "token" };
+  }
   if (bearer) {
     let info;
     try {
@@ -59,14 +76,19 @@ async function requestUser(): Promise<BootstrapSessionUser> {
     } catch {
       throw new ApiError(401, "unauthorized", "Invalid or expired access token");
     }
-    return { id: info.sub, email: info.email ?? null, name: info.name ?? null, image: info.picture ?? null };
+    return { user: { id: info.sub, email: info.email ?? null, name: info.name ?? null, image: info.picture ?? null }, via: "identity" };
   }
 
   const session = await auth();
   if (!session?.user?.id) {
     throw new ApiError(401, "unauthorized", "Sign in required");
   }
-  return { id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image };
+  return { user: { id: session.user.id, email: session.user.email, name: session.user.name, image: session.user.image }, via: "session" };
+}
+
+/** Things an access token can't do, whatever its scope: they need you signed in. */
+export function refuseAccessToken(ctx: Pick<LedgerSessionContext, "via">, what: string) {
+  if (ctx.via === "token") throw new ApiError(403, "forbidden", `${what} isn't available with an access token`);
 }
 
 export const requireLedgerSession = cache(async (): Promise<LedgerSessionContext> => {

@@ -5,8 +5,10 @@ import { BrandMark } from "@/src/components/BrandMark";
 import { ThemeControls } from "@/src/components/ThemeControls";
 
 const BRAND_NAME = "Noirly Ledger";
+const NAV_LINK = "focusable rounded-[var(--r-sm)] px-2 py-1.5 text-sm text-[var(--muted-foreground)] hover:text-[var(--text)]";
 
-export function MarketingHeader() {
+/** `signIn` adds a sign-in link, for public pages that don't have the landing page's button. */
+export function MarketingHeader({ signIn = false }: { signIn?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b border-[var(--hairline)] bg-[var(--bg)]/70 backdrop-blur-xl">
       <div className="shell flex h-[4.5rem] items-center justify-between gap-4 md:h-20">
@@ -25,7 +27,13 @@ export function MarketingHeader() {
             <span className="truncate">{BRAND_NAME}</span>
           </span>
         </Link>
-        <ThemeControls />
+        <div className="flex items-center gap-2 sm:gap-4">
+          <nav aria-label="Site" className="flex items-center gap-1 sm:gap-2">
+            <Link href="/docs" className={NAV_LINK}>Docs</Link>
+            {signIn ? <Link href="/login" className={NAV_LINK}>Sign in</Link> : null}
+          </nav>
+          <ThemeControls />
+        </div>
       </div>
     </header>
   );

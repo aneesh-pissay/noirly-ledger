@@ -10,6 +10,9 @@ import {
   RECURRENCE_FREQUENCIES,
   TRANSACTION_TYPES,
 } from "@/src/core/models/enums";
+import { sealedText } from "@/src/server/security/field-crypto";
+import { CLEARING_STATES } from "@/src/core/clearing";
+import { GST_SUPPLIES, GST_TREATMENTS } from "@/src/core/gst";
 
 const recurrenceSchema = new Schema(
   {
@@ -17,6 +20,55 @@ const recurrenceSchema = new Schema(
     interval: { type: Number, required: true, default: 1 },
     byMonthDay: { type: Number, default: undefined },
     until: { type: Date, default: null },
+  },
+  { _id: false },
+);
+
+// A recurring rule's reminders: days of notice before each charge (null for none), and a trial's end and a date to cancel by.
+const reminderSettingsSchema = new Schema(
+  {
+    daysBefore: { type: Number, default: null },
+    trialEndsOn: { type: String, default: null },
+    cancelBy: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+// One line of a split: its category and share, in the transaction's currency and in base.
+const splitSchema = new Schema(
+  {
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category", default: null },
+    amountMinor: { type: Number, required: true },
+    baseAmountMinor: { type: Number, required: true },
+    note: { type: String, default: null },
+  },
+  { _id: false },
+);
+
+// A file kept with a transaction (receipts, invoices, warranties), stored like receipts.
+const attachmentSchema = new Schema({
+  storageKey: { type: String, required: true },
+  name: { type: String, required: true },
+  contentType: { type: String, required: true },
+  size: { type: Number, required: true },
+  uploadedById: { type: Schema.Types.ObjectId, ref: "LedgerUser", required: true },
+  uploadedAt: { type: Date, required: true },
+});
+
+// GST in what was paid: the settings, and the tax worked out from the amount (see src/core/gst.ts).
+const gstSchema = new Schema(
+  {
+    ratePct: { type: Number, required: true },
+    treatment: { type: String, enum: GST_TREATMENTS, required: true },
+    supply: { type: String, enum: GST_SUPPLIES, required: true },
+    gstin: { type: String, default: null },
+    hsn: { type: String, default: null },
+    itcEligible: { type: Boolean, default: false },
+    taxableMinor: { type: Number, required: true },
+    cgstMinor: { type: Number, required: true },
+    sgstMinor: { type: Number, required: true },
+    igstMinor: { type: Number, required: true },
+    taxMinor: { type: Number, required: true },
   },
   { _id: false },
 );
@@ -45,12 +97,64 @@ const transactionSchema = new Schema(
       default: null,
       index: true,
     },
+    // The account the money went in or out of, if one was chosen; same currency as the account.
+    accountId: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      default: null,
+      index: true,
+    },
+    // Transfers only: the account the money went to, and what it received in that account's currency.
+    toAccountId: {
+      type: Schema.Types.ObjectId,
+      ref: "Account",
+      default: null,
+      index: true,
+    },
+    toAmountMinor: { type: Number, default: null },
+    // Refunds only: the expense this takes back (part or all of).
+    refundOfId: {
+      type: Schema.Types.ObjectId,
+      ref: "Transaction",
+      default: null,
+      index: true,
+    },
+    // Pending, cleared or reconciled against the bank; missing on older rows, which count as cleared.
+    clearing: { type: String, enum: CLEARING_STATES, default: "cleared" },
+    // Split across categories (two or more lines adding up to amountMinor); empty when not split, and then categoryId applies.
+    splits: { type: [splitSchema], default: [] },
+    // Free tags (lowercase), who was paid or paid you, and a project; see src/core/labels.ts.
+    tags: { type: [String], default: [] },
+    merchant: { type: String, default: null },
+    merchantKey: { type: String, default: null },
+    projectId: { type: Schema.Types.ObjectId, ref: "Project", default: null, index: true },
+    departmentId: { type: Schema.Types.ObjectId, ref: "Department", default: null, index: true },
+    // EMI payments: the plan, and which payment (0 the processing fee, -1 paying off early).
+    installmentPlanId: { type: Schema.Types.ObjectId, ref: "InstallmentPlan", default: null, index: true },
+    installmentNumber: { type: Number, default: null },
+    // Added by a statement import, which can be undone as a whole.
+    importBatchId: { type: Schema.Types.ObjectId, ref: "ImportBatch", default: null, index: true },
+    // More files besides the receipt; see src/server/transaction-activity.ts.
+    attachments: { type: [attachmentSchema], default: [] },
+    // UPI payments: the 12-digit reference and the UPI ID paid to or from (see src/core/upi.ts).
+    upiRef: { type: String, default: null },
+    upiId: { type: String, default: null },
+    gst: { type: gstSchema, default: null },
+    // Transactions someone said are separate payments, though they look alike (see src/server/duplicates.ts).
+    notDuplicateOf: { type: [Schema.Types.ObjectId], default: [] },
     date: { type: Date, required: true, index: true },
+    // Stored sealed; read back as text (src/server/security/field-crypto.ts).
     note: { type: String, default: null },
+    // Keyed hashes of the note's word beginnings, for search.
+    noteTerms: { type: [String], default: undefined, select: false },
     receiptUrl: { type: String, default: null },
     receiptStorageKey: { type: String, default: null },
     isRecurring: { type: Boolean, default: false },
     recurrence: { type: recurrenceSchema, default: null },
+    // Recurring rules only; null keeps the default notice (see src/core/reminders.ts).
+    reminders: { type: reminderSettingsSchema, default: null },
+    // Recurring rules only: when someone last said they still use it (see src/core/subscription-insights.ts).
+    reviewedOn: { type: String, default: null },
     recurringParentId: {
       type: Schema.Types.ObjectId,
       ref: "Transaction",
@@ -74,9 +178,15 @@ const transactionSchema = new Schema(
 );
 
 transactionSchema.index({ workspaceId: 1, date: -1 });
+transactionSchema.index({ "splits.categoryId": 1 });
+transactionSchema.index({ workspaceId: 1, tags: 1 });
+transactionSchema.index({ workspaceId: 1, merchantKey: 1 });
+transactionSchema.index({ workspaceId: 1, upiRef: 1 });
 transactionSchema.index({ budgetPoolId: 1, isPosted: 1 });
 // The recurring engine looks up a rule's occurrences by date.
 transactionSchema.index({ recurringParentId: 1, date: -1 });
+transactionSchema.index({ workspaceId: 1, noteTerms: 1 });
+sealedText(transactionSchema, { path: "note", termsPath: "noteTerms" });
 
 export type TransactionDocument = InferSchemaType<typeof transactionSchema> & {
   _id: Types.ObjectId;

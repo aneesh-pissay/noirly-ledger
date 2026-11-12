@@ -5,16 +5,29 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, type ReactNode } from "react";
 import {
   BarChart3,
+  Building2,
+  CheckCheck,
+  ClipboardList,
+  Briefcase,
   FolderKanban,
   Goal,
+  BookOpen,
+  HandCoins,
+  LineChart,
+  CalendarClock,
   LayoutDashboard,
+  Mail,
   Plus,
+  Landmark,
   Receipt,
   Repeat,
+  ScrollText,
   Settings,
   Tags,
   Users,
   Wallet,
+  Workflow,
+  Zap,
 } from "lucide-react";
 import {
   Avatar,
@@ -31,6 +44,10 @@ import { CommandPalette } from "@/src/features/command-palette/CommandPalette";
 import { TransactionComposer } from "@/src/features/transactions/TransactionComposer";
 import { NotificationBell } from "@/src/features/notifications/NotificationBell";
 import { ThemeControls } from "@/src/components/ThemeControls";
+import { NumberFormatProvider } from "@/src/components/NumberFormatProvider";
+import { PURPOSE_LABEL, PURPOSE_SECTIONS, poolsLabel, type WorkspacePurpose, type WorkspaceSection } from "@/src/core/workspace-purpose";
+import type { NumberFormat } from "@/src/core/locale-format";
+import { AppSwitcher } from "@/src/components/AppSwitcher";
 import { useUIStore, useWorkspaceStore } from "@/src/stores/ui-store";
 import type { WorkspaceWithRole } from "@/src/core/sync/types";
 import { can } from "@/src/core/permissions/can";
@@ -38,6 +55,7 @@ import { can } from "@/src/core/permissions/can";
 export type ShellUser = {
   displayName: string;
   email: string;
+  numberFormat: NumberFormat;
 };
 
 type Props = {
@@ -69,7 +87,9 @@ export function AppShell({ user, workspaces, children }: Props) {
     !pathname.startsWith("/settings") &&
     pathname !== "/login";
 
-  const teamRole = teams.find((w) => w.id === activeWorkspaceId)?.role ?? "member";
+  // What the person may do in the workspace open: their role, or a custom role's permissions.
+  const teamRole = teams.find((w) => w.id === activeWorkspaceId)?.grant ?? "member";
+  const composerWorkspace = (pathname.startsWith("/w/") ? teams.find((w) => w.id === activeWorkspaceId) : undefined) ?? personal;
 
   useEffect(() => {
     if (activeWorkspaceId) {
@@ -86,13 +106,22 @@ export function AppShell({ user, workspaces, children }: Props) {
   const groups: AppNavGroup[] = useMemo(() => {
     if (pathname.startsWith("/w/") && activeWorkspaceId) {
       const base = `/w/${activeWorkspaceId}`;
-      const money: AppNavItem[] = [
-        { href: `${base}/pools`, label: "Budget pools", icon: FolderKanban },
-        { href: `${base}/expenses`, label: "Expenses", icon: Receipt },
-      ];
-      if (can(teamRole, "expense.decide")) {
-        money.push({ href: `${base}/approvals`, label: "Approvals", icon: Wallet });
-      }
+      // What the workspace is for decides which pages it has.
+      const purpose = (teams.find((w) => w.id === activeWorkspaceId)?.purpose ?? "team") as WorkspacePurpose;
+      const sections: Record<WorkspaceSection, AppNavItem> = {
+        transactions: { href: `${base}/transactions`, label: "Transactions", icon: Receipt },
+        accounts: { href: `${base}/accounts`, label: "Accounts", icon: Landmark },
+        budgets: { href: `${base}/budgets`, label: "Budgets", icon: Wallet },
+        pools: { href: `${base}/pools`, label: poolsLabel(purpose), icon: FolderKanban },
+        goals: { href: `${base}/goals`, label: "Goals", icon: Goal },
+        expenses: { href: `${base}/expenses`, label: "Expenses", icon: ClipboardList },
+        approvals: { href: `${base}/approvals`, label: "Approvals", icon: CheckCheck },
+        reimbursements: { href: `${base}/reimbursements`, label: "Reimbursements", icon: HandCoins },
+        departments: { href: `${base}/departments`, label: "Departments", icon: Building2 },
+      };
+      const money: AppNavItem[] = PURPOSE_SECTIONS[purpose]
+        .filter((section) => section !== "approvals" || can(teamRole, "expense.decide"))
+        .map((section) => sections[section]);
 
       return [
         { items: [{ href: base, label: "Dashboard", icon: LayoutDashboard, match: "exact" }] },
@@ -101,8 +130,14 @@ export function AppShell({ user, workspaces, children }: Props) {
           label: "Workspace",
           items: [
             { href: `${base}/members`, label: "Members", icon: Users },
+            // Rules fill in transactions, so only where the workspace keeps its own.
+            ...(PURPOSE_SECTIONS[purpose].includes("transactions") ? [{ href: `${base}/rules`, label: "Rules", icon: Zap }] : []),
+            { href: `${base}/workflows`, label: "Workflows", icon: Workflow },
+            { href: `${base}/automations`, label: "Automations", icon: CalendarClock },
             { href: `${base}/reports`, label: "Reports", icon: BarChart3 },
+            { href: `${base}/audit`, label: "Audit history", icon: ScrollText },
             { href: "/settings", label: "Settings", icon: Settings },
+            { href: "/docs", label: "Docs", icon: BookOpen },
           ],
         },
       ];
@@ -114,7 +149,9 @@ export function AppShell({ user, workspaces, children }: Props) {
         label: "Money",
         items: [
           { href: "/transactions", label: "Transactions", icon: Receipt },
+          { href: "/accounts", label: "Accounts", icon: Landmark },
           { href: "/budgets", label: "Budgets", icon: Wallet },
+          { href: "/envelopes", label: "Envelopes", icon: Mail },
           { href: "/recurring", label: "Recurring", icon: Repeat },
         ],
       },
@@ -122,13 +159,19 @@ export function AppShell({ user, workspaces, children }: Props) {
         label: "Planning",
         items: [
           { href: "/goals", label: "Goals", icon: Goal },
+          { href: "/forecast", label: "Forecast", icon: LineChart },
           { href: "/categories", label: "Categories", icon: Tags },
+          { href: "/rules", label: "Rules", icon: Zap },
+          { href: "/workflows", label: "Workflows", icon: Workflow },
+          { href: "/automations", label: "Automations", icon: CalendarClock },
+          { href: "/projects", label: "Projects", icon: Briefcase },
           { href: "/reports", label: "Reports", icon: BarChart3 },
+          { href: "/audit", label: "Audit history", icon: ScrollText },
         ],
       },
-      { label: "Workspace", items: [{ href: "/settings", label: "Settings", icon: Settings }] },
+      { label: "Workspace", items: [{ href: "/settings", label: "Settings", icon: Settings }, { href: "/docs", label: "Docs", icon: BookOpen }] },
     ];
-  }, [activeWorkspaceId, pathname, teamRole]);
+  }, [activeWorkspaceId, pathname, teamRole, teams]);
 
   /**
    * Breadcrumb from the nav definition rather than from the URL, so a segment
@@ -188,7 +231,7 @@ export function AppShell({ user, workspaces, children }: Props) {
                     className={workspaceLinkClass(active)}
                   >
                     <span className="truncate">{workspace.name}</span>
-                    <span className="meta shrink-0 text-[0.5625rem]">team</span>
+                    <span className="meta shrink-0 text-[0.5625rem]">{PURPOSE_LABEL[(workspace.purpose === "personal" ? "team" : workspace.purpose)].toLowerCase()}</span>
                   </Link>
                 );
               })}
@@ -221,6 +264,7 @@ export function AppShell({ user, workspaces, children }: Props) {
               >
                 <Plus size={16} />
               </button>
+              <AppSwitcher current="ledger" />
               <ThemeControls size="sm" />
               <NotificationBell />
               <Avatar name={user.displayName} />
@@ -228,13 +272,15 @@ export function AppShell({ user, workspaces, children }: Props) {
           ),
         }}
       >
-        {children}
+        <NumberFormatProvider value={user.numberFormat}>{children}</NumberFormatProvider>
       </UIShell>
       <CommandPalette workspaces={workspaces} />
-      {personal ? (
+      {/* Adds to the workspace being looked at: a shared one under /w/, otherwise the personal one. */}
+      {composerWorkspace ? (
         <TransactionComposer
-          workspaceId={personal.id}
-          baseCurrency={personal.baseCurrency}
+          key={composerWorkspace.id}
+          workspaceId={composerWorkspace.id}
+          baseCurrency={composerWorkspace.baseCurrency}
         />
       ) : null}
     </>

@@ -6,6 +6,7 @@ import {
   BudgetPool,
   Category,
   LedgerUser,
+  Project,
   Transaction,
 } from "@/src/server/models";
 import {
@@ -14,6 +15,10 @@ import {
   type CsvTransactionRow,
 } from "@/src/server/exports/csv";
 import { renderSummaryPdf, type PdfSummary } from "@/src/server/exports/pdf";
+import { writeXlsx, XLSX_TYPE } from "@/src/server/exports/xlsx-write";
+import { spendSign } from "@/src/core/refunds";
+import { PATH_SEPARATOR } from "@/src/core/categories";
+import type { TransactionType } from "@/src/core/models/enums";
 
 export type ExportQuery = {
   workspaceId: string;
@@ -42,7 +47,7 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
   const txns = await Transaction.find(filter).sort({ date: 1 }).limit(10_000);
   const categories = await Category.find({
     _id: {
-      $in: txns.map((t) => t.categoryId).filter((id): id is Types.ObjectId => Boolean(id)),
+      $in: txns.flatMap((t) => [t.categoryId, ...(t.splits ?? []).map((s) => s.categoryId)]).filter((id): id is Types.ObjectId => Boolean(id)),
     },
   });
   const pools = await BudgetPool.find({
@@ -55,8 +60,18 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
   const users = await LedgerUser.find({
     _id: { $in: txns.map((t) => t.createdById) },
   });
-  const catById = new Map(categories.map((c) => [c._id.toString(), c.name]));
+  // Subcategories export as "Parent › Child".
+  const parents = await Category.find({ _id: { $in: categories.map((c) => c.parentId).filter((id): id is Types.ObjectId => Boolean(id)) } }).select("name").lean();
+  const parentName = new Map(parents.map((p) => [p._id.toString(), p.name]));
+  const catById = new Map(
+    categories.map((c) => {
+      const parent = c.parentId ? parentName.get(c.parentId.toString()) : undefined;
+      return [c._id.toString(), parent ? `${parent}${PATH_SEPARATOR}${c.name}` : c.name];
+    }),
+  );
   const poolById = new Map(pools.map((p) => [p._id.toString(), p.name]));
+  const projects = await Project.find({ _id: { $in: txns.map((t) => t.projectId).filter((id): id is Types.ObjectId => Boolean(id)) } }).select("name").lean();
+  const projectById = new Map(projects.map((p) => [p._id.toString(), p.name]));
   const userById = new Map(users.map((u) => [u._id.toString(), u.displayName]));
 
   return txns.map((txn) => ({
@@ -65,11 +80,19 @@ async function loadRows(query: ExportQuery): Promise<CsvTransactionRow[]> {
     amountMinor: txn.amountMinor,
     currency: txn.currency,
     baseAmountMinor: txn.baseAmountMinor,
-    category: txn.categoryId ? catById.get(txn.categoryId.toString()) ?? "" : "",
+    category: txn.splits?.length
+      ? `Split: ${txn.splits.map((s) => (s.categoryId ? catById.get(s.categoryId.toString()) ?? "" : "Uncategorized")).join(", ")}`
+      : txn.categoryId ? catById.get(txn.categoryId.toString()) ?? "" : "",
     pool: txn.budgetPoolId ? poolById.get(txn.budgetPoolId.toString()) ?? "" : "",
     note: txn.note ?? "",
     status: txn.isPosted ? "posted" : "pending",
     createdBy: userById.get(txn.createdById.toString()) ?? "",
+    merchant: txn.merchant ?? "",
+    tags: (txn.tags ?? []).join(" "),
+    project: txn.projectId ? projectById.get(txn.projectId.toString()) ?? "" : "",
+    gst: txn.gst
+      ? { ratePct: txn.gst.ratePct, taxableMinor: txn.gst.taxableMinor, cgstMinor: txn.gst.cgstMinor, sgstMinor: txn.gst.sgstMinor, igstMinor: txn.gst.igstMinor, gstin: txn.gst.gstin ?? null, hsn: txn.gst.hsn ?? null }
+      : null,
   }));
 }
 
@@ -78,6 +101,36 @@ export async function buildCsvExport(query: ExportQuery): Promise<string> {
     const rows = await loadRows(query);
     return [CSV_HEADER, ...rows.map(transactionToCsvRow)].join("\n") + "\n";
   });
+}
+
+/** The same rows as the CSV, as a spreadsheet: amounts are numbers (major units), so they add up in Excel. */
+export async function buildXlsxExport(query: ExportQuery): Promise<Buffer> {
+  return withDb(async () => {
+    const rows = await loadRows(query);
+    const header = ["date", "type", "amount", "currency", "base_amount", "category", "pool", "note", "status", "created_by", "merchant", "tags", "project", "gst_rate", "taxable_value", "cgst", "sgst", "igst", "gstin", "hsn_sac"];
+    const major = (minor: number) => minor / 100;
+    return writeXlsx(`Ledger ${query.from} to ${query.to}`, [
+      header,
+      ...rows.map((r) => [
+        r.date, r.type, major(r.amountMinor), r.currency, major(r.baseAmountMinor), r.category, r.pool, r.note, r.status, r.createdBy, r.merchant, r.tags, r.project,
+        r.gst ? r.gst.ratePct : null,
+        r.gst ? major(r.gst.taxableMinor) : null,
+        r.gst ? major(r.gst.cgstMinor) : null,
+        r.gst ? major(r.gst.sgstMinor) : null,
+        r.gst ? major(r.gst.igstMinor) : null,
+        r.gst?.gstin ?? null,
+        r.gst?.hsn ?? null,
+      ]),
+    ]);
+  });
+}
+
+/** An export as a file: its name, type and bytes. */
+export async function buildExportFile(query: ExportQuery, format: "csv" | "pdf" | "xlsx", workspaceName: string, baseCurrency: string) {
+  const stamp = `${query.from}_${query.to}`;
+  if (format === "csv") return { filename: `ledger-${stamp}.csv`, contentType: "text/csv; charset=utf-8", content: Buffer.from(await buildCsvExport(query), "utf8") };
+  if (format === "xlsx") return { filename: `ledger-${stamp}.xlsx`, contentType: XLSX_TYPE, content: await buildXlsxExport(query) };
+  return { filename: `ledger-${stamp}.pdf`, contentType: "application/pdf", content: Buffer.from(await buildPdfExport(query, workspaceName, baseCurrency)) };
 }
 
 export async function buildPdfExport(
@@ -94,20 +147,19 @@ export async function buildPdfExport(
     const incomeMinor = rows
       .filter((r) => r.type === "income")
       .reduce((sum, r) => sum + r.baseAmountMinor, 0);
-    const expenseMinor = rows
-      .filter((r) => r.type === "expense")
-      .reduce((sum, r) => sum + r.baseAmountMinor, 0);
+    // Spending is net of refunds.
+    const expenseMinor = rows.reduce((sum, r) => sum + spendSign(r.type as TransactionType) * r.baseAmountMinor, 0);
 
     const byLabel = new Map<string, number>();
     for (const row of rows) {
-      if (row.type !== "expense") continue;
+      if (!spendSign(row.type as TransactionType)) continue;
       const label =
         query.template === "pool"
           ? row.pool || "Pool"
           : query.template === "approvals"
             ? row.status
             : row.category || "Uncategorized";
-      byLabel.set(label, (byLabel.get(label) ?? 0) + row.baseAmountMinor);
+      byLabel.set(label, (byLabel.get(label) ?? 0) + spendSign(row.type as TransactionType) * row.baseAmountMinor);
     }
 
     if (query.template === "pool" && query.budgetPoolId) {

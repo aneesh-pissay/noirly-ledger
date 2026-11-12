@@ -1,3 +1,5 @@
+import type { Grant, PermissionAction } from "@/src/core/permissions/can";
+import type { CashFlow } from "@/src/core/cash-flow";
 import type {
   ApprovalStatus,
   BudgetPeriod,
@@ -7,6 +9,22 @@ import type {
   WorkspaceKind,
 } from "@/src/core/models/enums";
 import type { MoneyMinor } from "@/src/core/money";
+import type { AccountKind } from "@/src/core/accounts";
+import type { Clearing } from "@/src/core/clearing";
+import type { SplitLine } from "@/src/core/splits";
+import type { RolloverMode } from "@/src/core/budgets/rollover";
+import type { RevisionReason } from "@/src/core/budgets/revisions";
+import type { ForecastBaseline, ScenarioChange } from "@/src/core/forecast";
+import type { WorkspacePurpose } from "@/src/core/workspace-purpose";
+import type { ViewFilters } from "@/src/core/search";
+import type { FieldChange, HistoryAction } from "@/src/core/history";
+import type { ApprovalRuleSpec, ApprovalStepState } from "@/src/core/approval-rules";
+import type { PolicyViolation } from "@/src/core/spending-policies";
+import type { DeadlineSettings } from "@/src/core/deadlines";
+import type { PoolRules } from "@/src/core/pool-rules";
+import type { PoolTemplate } from "@/src/core/pool-templates";
+import type { GstAmounts, GstSettings } from "@/src/core/gst";
+import type { ColumnMapping, ImportRow } from "@/src/core/imports";
 
 export type {
   ApprovalStatus,
@@ -20,15 +38,27 @@ export type {
 export type Workspace = {
   id: string;
   kind: WorkspaceKind;
+  /** What a shared workspace is for; "personal" for the personal one. */
+  purpose: WorkspacePurpose | "personal";
   name: string;
   slug: string;
   ownerUserId: string;
   baseCurrency: string;
+  /** Month (1–12) its financial year starts in. */
+  fiscalYearStartMonth: number;
+  /** When expenses must be submitted and waiting approvals are chased. */
+  approvalDeadlines: DeadlineSettings;
+  /** Exchange rates are fetched from the rates provider as well as set by hand. */
+  autoFxRates: boolean;
   createdAt: string;
   updatedAt: string;
 };
 
-export type WorkspaceWithRole = Workspace & { role: MemberRole };
+export type WorkspaceWithRole = Workspace & {
+  role: MemberRole;
+  /** What the person may do here: their role, or their custom role's permissions. */
+  grant: Grant;
+};
 
 export type WorkspaceMember = {
   id: string;
@@ -46,6 +76,10 @@ export type Category = {
   icon: string;
   color: string;
   isSystem: boolean;
+  /** Set on a subcategory: its top-level category. */
+  parentId: string | null;
+  /** GST new transactions in it start with. */
+  defaultGst: Pick<GstSettings, "ratePct" | "treatment" | "supply" | "itcEligible"> | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -68,6 +102,35 @@ export type Transaction = {
   baseAmountMinor: MoneyMinor;
   categoryId: string | null;
   budgetPoolId: string | null;
+  /** The account it was paid from or into, if any. */
+  accountId: string | null;
+  /** Transfers: the account the money went to, and the amount it received in that account's currency. */
+  toAccountId: string | null;
+  toAmountMinor: MoneyMinor | null;
+  /** Refunds: the expense this takes back. */
+  refundOfId: string | null;
+  /** Expenses: how much refunds have taken back so far, in its currency. */
+  refundedMinor: MoneyMinor;
+  /** Against the bank: pending, cleared, or reconciled to a statement. */
+  clearing: Clearing;
+  /** Files kept with it besides the receipt. */
+  attachmentCount: number;
+  /** GST in what was paid, with the tax worked out. */
+  gst: (GstSettings & GstAmounts) | null;
+  /** UPI payments: the 12-digit reference, and the UPI ID paid to or from. */
+  upiRef: string | null;
+  upiId: string | null;
+  /** EMI payments: the plan and which payment (0 the processing fee, -1 paying off early). */
+  installmentPlanId: string | null;
+  installmentNumber: number | null;
+  /** Split across categories; empty when it isn't, and then categoryId applies. */
+  splits: SplitLine[];
+  tags: string[];
+  /** Who was paid, or paid you. */
+  merchant: string | null;
+  projectId: string | null;
+  /** The department or team it's spent by (src/core/group-budgets.ts). */
+  departmentId: string | null;
   date: string;
   note: string | null;
   receiptUrl: string | null;
@@ -83,6 +146,30 @@ export type Transaction = {
   deletedAt: string | null;
 };
 
+/** Where money is kept or owed. balanceMinor is what's in it today, or for cards and loans what's owed, in its currency. */
+export type Account = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  kind: AccountKind;
+  currency: string;
+  openingBalanceMinor: MoneyMinor;
+  openingDate: string;
+  institution: string | null;
+  /** "•••• 1234" when a number is saved; the whole number is only given on asking. */
+  numberMasked: string | null;
+  archived: boolean;
+  balanceMinor: MoneyMinor;
+  /** The balance leaving out pending transactions: what the bank should show. */
+  clearedBalanceMinor: MoneyMinor;
+  pendingCount: number;
+  /** Dated after today, so not in the balance yet. */
+  scheduledCount: number;
+  transactionCount: number;
+  reconciledThrough: string | null;
+  reconciledBalanceMinor: MoneyMinor | null;
+};
+
 export type Budget = {
   id: string;
   workspaceId: string;
@@ -93,6 +180,11 @@ export type Budget = {
   limitAmountMinor: MoneyMinor;
   currency: string;
   alertThresholdPct: number;
+  /** What carries into the next period, counted from rolloverSince. */
+  rollover: RolloverMode;
+  rolloverSince: string | null;
+  /** Custom budgets: moves on to the next stretch of the same length when its dates pass. */
+  renew: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -108,6 +200,10 @@ export type BudgetPool = {
   periodStart: string | null;
   periodEnd: string | null;
   archivedAt: string | null;
+  /** Its own approvers, auto-approval and per-member limits. */
+  rules: PoolRules;
+  /** The template it started from, if any. */
+  template: PoolTemplate | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -136,9 +232,19 @@ export type ApprovalRequest = {
   reviewNote: string | null;
   submittedAt: string | null;
   reviewedAt: string | null;
+  /** The chain of approvals it needs (src/core/approval-rules.ts); it's approved once the last step is. */
+  steps: ApprovalStepState[];
+  currentStep: number;
+  /** The rule that set the chain; null for the default single step. */
+  ruleName: string | null;
+  /** Submitted past the workspace's deadline. */
+  lateSubmission: { deadline: string; daysLate: number } | null;
   createdAt: string;
   updatedAt: string;
 };
+
+/** A workspace's rule for which expenses need which approvers; amounts in its base currency. */
+export type ApprovalRuleView = ApprovalRuleSpec & { order: number };
 
 export type FxRate = {
   id: string;
@@ -146,6 +252,8 @@ export type FxRate = {
   currency: string;
   rateToBaseScaled: number;
   effectiveFrom: string;
+  /** Set by hand, or fetched from the rates provider. */
+  source: "user" | "auto";
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -156,7 +264,16 @@ export type NotificationKind =
   | "approval.requested"
   | "approval.decided"
   | "goal.reached"
-  | "recurring.due";
+  | "recurring.due"
+  | "bill.reminder"
+  | "subscription.price"
+  | "goal.milestone"
+  | "goal.contribution"
+  | "pool.contribution"
+  | "report.failed"
+  | "workflow"
+  | "transaction.large"
+  | "email.received";
 
 export type InAppNotification = {
   id: string;
@@ -175,13 +292,28 @@ export type MemberView = {
   email: string;
   displayName: string;
   role: MemberRole;
+  /** A custom role the workspace gave them, if any. */
+  customRoleId: string | null;
+  customRoleName: string | null;
 };
+
+/** A role a workspace defined for itself. */
+export type CustomRoleView = { id: string; name: string; permissions: PermissionAction[]; memberCount: number };
 
 export type ApprovalView = ApprovalRequest & {
   transaction: Transaction;
   submitterName: string;
-  /** Whether the viewer may approve or reject it (not their own, unless nobody else can). */
+  /** Whether the viewer may decide its current step (not their own, nor a second step, unless nobody else can). */
   canDecide: boolean;
+  /** When the viewer decides it standing in for someone away: who. */
+  actingForName: string | null;
+  /** How it breaks the workspace's spending policies, as it is now (a receipt added later clears that flag). */
+  violations: PolicyViolation[];
+  /** While waiting: whole days its current step has waited, and whether that's past the workspace's lines. */
+  waitingDays: number | null;
+  late: boolean;
+  /** Each step in words ("Any approver", "Ada or Ben"), and who decided it. */
+  stepLabels: Array<{ label: string; decidedByName: string | null }>;
 };
 
 export type CreateBudgetPoolInput = {
@@ -192,6 +324,8 @@ export type CreateBudgetPoolInput = {
   currency?: string;
   periodStart?: string | null;
   periodEnd?: string | null;
+  /** Start from a template's rules, shares and categories. */
+  template?: PoolTemplate | null;
 };
 
 export type SubmitExpenseInput = {
@@ -204,6 +338,12 @@ export type SubmitExpenseInput = {
   note?: string | null;
   receiptUrl?: string | null;
   receiptStorageKey?: string | null;
+  /** Paid out of their own pocket: pay them back once it's approved. */
+  reimburse?: boolean;
+  merchant?: string | null;
+  projectId?: string | null;
+  /** Left out: the submitter's own team or department, when there's just one. */
+  departmentId?: string | null;
 };
 
 export type DecideApprovalInput = {
@@ -215,6 +355,7 @@ export type DecideApprovalInput = {
 export type CreateWorkspaceInput = {
   name: string;
   kind: "team";
+  purpose?: WorkspacePurpose;
   baseCurrency: string;
 };
 
@@ -224,6 +365,16 @@ export type ListTransactionsQuery = {
   limit?: number;
   categoryId?: string;
   budgetPoolId?: string;
+  accountId?: string;
+  tag?: string;
+  /** A merchant's name, matched however it's spelled. */
+  merchant?: string;
+  projectId?: string;
+  /** Text to find in notes, merchants, tags and category names, or an amount. */
+  q?: string;
+  minAmountMinor?: number;
+  maxAmountMinor?: number;
+  clearing?: Clearing;
   from?: string;
   to?: string;
   recurringOnly?: boolean;
@@ -236,11 +387,29 @@ export type CreateTransactionInput = {
   amountMinor: number;
   currency: string;
   categoryId?: string | null;
+  accountId?: string | null;
+  toAccountId?: string | null;
+  toAmountMinor?: number | null;
+  refundOfId?: string | null;
+  upiRef?: string | null;
+  upiId?: string | null;
+  /** GST settings; the tax is worked out from the amount. null clears it. */
+  gst?: GstSettings | null;
+  /** New transactions are pending or cleared; only reconciling an account makes them reconciled. */
+  clearing?: Clearing;
+  /** Two or more lines that add up to the amount; null removes a split. */
+  splits?: SplitLine[] | null;
+  tags?: string[] | null;
+  merchant?: string | null;
+  projectId?: string | null;
+  departmentId?: string | null;
   date: string;
   note?: string | null;
   receiptUrl?: string | null;
   receiptStorageKey?: string | null;
   recurrence?: RecurrenceRule | null;
+  /** Server-side only (imports): the category when neither this nor a rule gives one. */
+  fallbackCategoryId?: string | null;
 };
 
 export type UpdateTransactionInput = Partial<
@@ -252,6 +421,8 @@ export type CreateCategoryInput = {
   name: string;
   icon: string;
   color: string;
+  parentId?: string | null;
+  defaultGst?: Category["defaultGst"];
 };
 
 export type UpsertBudgetInput = {
@@ -263,6 +434,142 @@ export type UpsertBudgetInput = {
   limitAmountMinor: number;
   currency?: string;
   alertThresholdPct?: number;
+  rollover?: RolloverMode;
+  /** The day carrying starts from; defaults to the start of the current period when rollover is turned on. */
+  rolloverSince?: string | null;
+  renew?: boolean;
+  /** Server-side: why the limit changed, for the budget's history (defaults to created or edited). */
+  revisionReason?: RevisionReason;
+};
+
+export type BudgetRevisionRecord = {
+  id: string;
+  budgetId: string;
+  categoryId: string;
+  period: BudgetPeriod;
+  previousLimitMinor: MoneyMinor | null;
+  limitMinor: MoneyMinor | null;
+  reason: RevisionReason;
+  note: string | null;
+  moveId: string | null;
+  otherBudgetId: string | null;
+  createdAt: string;
+};
+
+/** What a typical month looks like, for forecasts; see src/core/forecast.ts. */
+export type ForecastBaselineResult = {
+  basis: "recent" | "budgets";
+  baseCurrency: string;
+  lookbackMonths: number;
+  /** The full months averaged over. */
+  from: string;
+  to: string;
+  today: string;
+  baseline: ForecastBaseline;
+  /** Each top-level category's monthly spending and where it came from. */
+  lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; source: "recent" | "budget" }>;
+  missingRates: string[];
+};
+
+/** A transaction's files, comments and change history, newest first. */
+export type TransactionActivity = {
+  /** Whether the person looking may add or remove files. */
+  canEdit: boolean;
+  attachments: Array<{ id: string; name: string; contentType: string; size: number; url: string; uploadedAt: string }>;
+  comments: Array<{ id: string; body: string; authorName: string; createdAt: string; canDelete: boolean }>;
+  history: Array<{ id: string; action: HistoryAction; changes: FieldChange[]; detail: string | null; actorName: string; createdAt: string }>;
+};
+
+export type ImportPreview = {
+  fileName: string;
+  headers: string[];
+  /** Lines above the column names, like the account details banks put first. */
+  preamble: string[];
+  mapping: ColumnMapping;
+  rows: Array<ImportRow & { duplicate: boolean; /** What the workspace's rules will fill in for it. */ rule: { names: string[]; categoryId: string | null; merchant: string | null } | null }>;
+};
+
+export type ImportBatchSummary = {
+  id: string;
+  fileName: string;
+  accountId: string | null;
+  rowCount: number;
+  createdCount: number;
+  skippedCount: number;
+  /** Its transactions still there. */
+  liveCount: number;
+  rolledBack: boolean;
+  createdAt: string;
+};
+
+/** A receipt in the inbox: what it's for, and the transactions it could belong to until it's matched. */
+export type InboxReceipt = {
+  id: string;
+  name: string;
+  url: string;
+  contentType: string;
+  size: number;
+  date: string | null;
+  amountMinor: number | null;
+  currency: string | null;
+  merchant: string | null;
+  transactionId: string | null;
+  matchedAt: string | null;
+  createdAt: string;
+  /** Best first; empty once matched. */
+  suggestions: Transaction[];
+};
+
+export type InstallmentPlanSummary = {
+  id: string;
+  name: string;
+  principalMinor: MoneyMinor;
+  currency: string;
+  months: number;
+  annualRatePct: number;
+  taxOnInterestPct: number;
+  processingFeeMinor: MoneyMinor;
+  firstDate: string;
+  accountId: string | null;
+  categoryId: string | null;
+  closed: boolean;
+  paidCount: number;
+  monthlyMinor: MoneyMinor;
+  /** The installments still to come. */
+  leftToPayMinor: MoneyMinor;
+  principalLeftMinor: MoneyMinor;
+  nextDate: string | null;
+  /** Interest, tax and fee over the whole plan, and everything paid. */
+  costMinor: MoneyMinor;
+  totalMinor: MoneyMinor;
+};
+
+export type SavedView = { id: string; name: string; filters: ViewFilters };
+
+export type SavedScenario = { id: string; name: string; changes: ScenarioChange[]; updatedAt: string };
+
+/** What an expense being entered would do to one budget. */
+export type BudgetImpact = {
+  budgetId: string;
+  categoryId: string;
+  period: BudgetPeriod;
+  availableMinor: MoneyMinor;
+  spentMinor: MoneyMinor;
+  addMinor: MoneyMinor;
+  /** Left after this expense (negative when over). */
+  leftMinor: MoneyMinor;
+  state: "ok" | "near" | "over";
+  alreadyOver: boolean;
+};
+
+export type BudgetTemplateSummary = {
+  id: string;
+  name: string;
+  description: string;
+  builtIn: boolean;
+  /** Its amounts are shares of monthly income, asked for when applying. */
+  needsIncome: boolean;
+  lineCount: number;
 };
 
 export type UpsertSavingsGoalInput = {
@@ -281,7 +588,8 @@ export type UpsertFxRateInput = {
   effectiveFrom: string;
 };
 
-export type DateRangePreset = "7d" | "30d" | "90d" | "mtd";
+/** "fy" is the financial year to date. */
+export type DateRangePreset = "7d" | "30d" | "90d" | "mtd" | "fy";
 
 export type DashboardSummary = {
   baseCurrency: string;
@@ -300,6 +608,12 @@ export type DashboardSummary = {
     budget: Budget;
     spentMinor: number;
     remainingMinor: number;
+    /** Carried in from earlier periods (negative when overspending carries), and limit plus that. */
+    carriedInMinor: number;
+    availableMinor: number;
+    /** The current period's first and last days; a yearly budget runs over the financial year. */
+    periodFrom: string;
+    periodTo: string;
   }>;
 };
 
@@ -327,7 +641,8 @@ export interface LedgerSyncProvider {
   createBudgetPool(input: CreateBudgetPoolInput): Promise<BudgetPool>;
   listSavingsGoals(workspaceId: string): Promise<SavingsGoal[]>;
   upsertSavingsGoal(input: UpsertSavingsGoalInput): Promise<SavingsGoal>;
-  contributeToGoal(id: string, amountMinor: number): Promise<SavingsGoal>;
+  /** Adds to a goal (or takes out, negative), on `date` (YYYY-MM-DD, today if left out). */
+  contributeToGoal(id: string, amountMinor: number, date?: string): Promise<SavingsGoal>;
   deleteSavingsGoal(id: string): Promise<void>;
   listApprovals(query: {
     workspaceId: string;
@@ -352,3 +667,120 @@ export interface LedgerSyncProvider {
     preset: DateRangePreset,
   ): Promise<DashboardSummary>;
 }
+
+/** Something the workspace spends on over time; totals are in base currency, spending net of refunds. */
+export type Project = {
+  id: string;
+  workspaceId: string;
+  name: string;
+  color: string;
+  archived: boolean;
+  spentMinor: MoneyMinor;
+  incomeMinor: MoneyMinor;
+  transactionCount: number;
+  /** For the project's whole life, in base currency; null for none. */
+  budgetMinor: MoneyMinor | null;
+  alertPct: number;
+};
+
+export type TagSummary = { tag: string; count: number };
+export type MerchantSummary = { key: string; name: string; count: number; spentMinor: MoneyMinor };
+
+/** Envelopes on top of accounts, in base currency; see src/core/envelopes.ts. */
+export type EnvelopeState = {
+  started: boolean;
+  since: string | null;
+  baseCurrency: string;
+  readyToAssignMinor: MoneyMinor;
+  /** Cash, bank and wallet balances today, and what's owed on credit cards. */
+  cashMinor: MoneyMinor;
+  cardDebtMinor: MoneyMinor;
+  /** Spending since the start with no envelope (uncategorized); it came out of Ready to assign. */
+  uncategorizedSpentMinor: MoneyMinor;
+  /** One per top-level category. */
+  envelopes: Array<{ categoryId: string; fundedMinor: MoneyMinor; spentMinor: MoneyMinor; balanceMinor: MoneyMinor }>;
+  missingRates: string[];
+};
+
+export type EnvelopeMoveRecord = {
+  id: string;
+  /** null is Ready to assign. */
+  fromCategoryId: string | null;
+  toCategoryId: string | null;
+  amountMinor: MoneyMinor;
+  note: string | null;
+  createdAt: string;
+};
+
+/** A month's zero-based plan in base currency: income to plan with, what budgets assign, and what's left. */
+export type MonthPlan = {
+  month: string;
+  baseCurrency: string;
+  /** What the month is planned with; null until set, and then income received counts. */
+  expectedIncomeMinor: MoneyMinor | null;
+  receivedIncomeMinor: MoneyMinor;
+  incomeMinor: MoneyMinor;
+  assignedMinor: MoneyMinor;
+  leftMinor: MoneyMinor;
+  state: "balanced" | "unassigned" | "overassigned";
+  /** Per category with budgets: the month's share of them, and its monthly budget (the one edited here) if any. */
+  lines: Array<{ categoryId: string; monthlyMinor: MoneyMinor; monthlyBudgetId: string | null; monthlyLimitMinor: MoneyMinor | null }>;
+};
+
+/** What a workspace has and owes across its accounts, in its base currency. */
+export type NetWorth = {
+  baseCurrency: string;
+  assetsMinor: MoneyMinor;
+  liabilitiesMinor: MoneyMinor;
+  netMinor: MoneyMinor;
+  /** baseBalanceMinor is null when the account's currency has no FX rate yet. */
+  accounts: Array<{ id: string; name: string; kind: AccountKind; currency: string; archived: boolean; balanceMinor: MoneyMinor; baseBalanceMinor: MoneyMinor | null }>;
+  /** Month ends, then today. */
+  history: Array<{ date: string; assetsMinor: MoneyMinor; liabilitiesMinor: MoneyMinor; netMinor: MoneyMinor }>;
+  missingRates: string[];
+};
+
+/** Something known to be coming: a future-dated transaction or a recurring rule's next occurrence. */
+export type UpcomingItem = {
+  date: string;
+  /** The note, or the category's name. */
+  label: string;
+  type: TransactionType;
+  amountMinor: MoneyMinor;
+  currency: string;
+  accountId: string | null;
+  toAccountId: string | null;
+  toAmountMinor: MoneyMinor | null;
+  categoryId: string | null;
+  recurring: boolean;
+  /** A bill paid by hand (see src/core/payments.ts), not a transaction yet. */
+  bill?: boolean;
+  /** Recurring ones: the rule, its merchant and note, and how often it repeats. */
+  ruleId?: string;
+  merchant?: string | null;
+  note?: string | null;
+  frequency?: string;
+};
+
+/** Where open accounts are heading over a window, and what's free to spend by its end. */
+export type Projection = {
+  baseCurrency: string;
+  from: string;
+  through: string;
+  availableToSpendMinor: MoneyMinor;
+  accounts: Array<{
+    id: string;
+    name: string;
+    kind: AccountKind;
+    currency: string;
+    todayMinor: MoneyMinor;
+    projectedMinor: MoneyMinor;
+    /** The least in it (or most owed) on the way, and the day; null date when it never dips. */
+    lowestMinor: MoneyMinor;
+    lowestDate: string | null;
+  }>;
+  upcoming: UpcomingItem[];
+  /** Money on hand day by day, in the base currency. */
+  cashFlow: CashFlow;
+  missingRates: string[];
+};

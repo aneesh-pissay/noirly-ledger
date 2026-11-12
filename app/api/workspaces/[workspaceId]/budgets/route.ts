@@ -35,6 +35,9 @@ export async function POST(
       limitAmountMinor: parseMajorToMinor(body.limitMajor),
       currency: body.currency,
       alertThresholdPct: body.alertThresholdPct,
+      rollover: body.rollover,
+      rolloverSince: body.rolloverSince,
+      renew: body.renew,
     });
     return jsonOk({ budget });
   } catch (error) {

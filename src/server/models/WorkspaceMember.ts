@@ -27,6 +27,8 @@ const workspaceMemberSchema = new Schema(
       enum: MEMBER_ROLES,
       required: true,
     },
+    // A custom role the workspace defined; when set, it decides what the member may do (never for an owner).
+    customRoleId: { type: Schema.Types.ObjectId, ref: "WorkspaceRole", default: null },
   },
   { timestamps: true },
 );

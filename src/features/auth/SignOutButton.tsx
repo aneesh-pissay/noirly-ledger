@@ -1,34 +1,33 @@
 "use client";
 
-import { useState } from "react";
-import { createPortal } from "react-dom";
-import { signOut } from "next-auth/react";
+import { createPortal, useFormStatus } from "react-dom";
+import { signOutAction } from "@/src/features/auth/actions";
 import { LedgerBusyScreen } from "@/src/components/LedgerBusyScreen";
 
+/**
+ * A server action, so sign-out is one request: the action clears the session
+ * and its redirect carries /login back in the same response. The client
+ * signOut() it replaced fetched a CSRF token, POSTed, then loaded /login.
+ */
 export function SignOutButton() {
-  const [busy, setBusy] = useState(false);
+  return (
+    <form action={signOutAction} className="shrink-0">
+      <SignOutSubmit />
+    </form>
+  );
+}
 
-  async function onSignOut() {
-    setBusy(true);
-    try {
-      await signOut({ callbackUrl: "/login", redirect: true });
-    } catch {
-      // A full load on purpose: nothing from the signed-in session stays in memory.
-      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.assign("/login");
-    }
-  }
-
+function SignOutSubmit() {
+  const { pending } = useFormStatus();
   return (
     <>
-      {busy
+      {pending
         ? createPortal(<LedgerBusyScreen label="Signing out" />, document.body)
         : null}
       <button
         className="shrink-0 cursor-pointer whitespace-nowrap border border-[var(--hairline)] px-3 py-1.5 text-left text-sm text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--accent-ink)]"
-        type="button"
-        onClick={() => void onSignOut()}
-        disabled={busy}
+        type="submit"
+        disabled={pending}
       >
         Sign out
       </button>

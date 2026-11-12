@@ -1,8 +1,9 @@
-import { DEFAULT_CATEGORIES } from "@/src/core/categories/defaults";
+import { startingCategories, type WorkspacePurpose } from "@/src/core/workspace-purpose";
 import { Category } from "@/src/server/models";
 import type { Types } from "mongoose";
 
-export async function seedSystemCategories(workspaceId: Types.ObjectId) {
+/** A new workspace's starting categories, which depend on what it's for. */
+export async function seedSystemCategories(workspaceId: Types.ObjectId, purpose: WorkspacePurpose | "personal" = "personal") {
   const existing = await Category.countDocuments({
     workspaceId,
     isSystem: true,
@@ -11,7 +12,7 @@ export async function seedSystemCategories(workspaceId: Types.ObjectId) {
   if (existing > 0) return;
 
   await Category.insertMany(
-    DEFAULT_CATEGORIES.map((category) => ({
+    startingCategories(purpose).map((category) => ({
       workspaceId,
       name: category.name,
       icon: category.icon,

@@ -6,6 +6,7 @@ import {
   type Model,
   type Types,
 } from "mongoose";
+import { NUMBER_FORMATS } from "@/src/core/locale-format";
 
 const userSchema = new Schema(
   {
@@ -29,6 +30,8 @@ const userSchema = new Schema(
     avatarUrl: { type: String, default: null },
     baseCurrency: { type: String, required: true, default: "USD", uppercase: true },
     locale: { type: String, required: true, default: "en-US" },
+    // How this person reads amounts: lakh/crore or thousands/millions (see src/core/locale-format.ts).
+    numberFormat: { type: String, enum: NUMBER_FORMATS, default: "auto" },
     /** Sessions signed in before this instant are refused (set on sign-out). */
     sessionsRevokedAt: { type: Date, default: null },
   },
