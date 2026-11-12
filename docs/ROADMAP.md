@@ -24,7 +24,7 @@ Effort: **S** = days, **M** = 1–2 weeks, **L** = a month or more.
 | 6. Reports and analytics | 9 / 9 |
 | 7. Automations and integrations | 8 / 8 |
 | 8. Security, privacy and audit | 7 / 7 |
-| 9. Interface and platform | 0 / 9 |
+| 9. Interface and platform | 1 / 9 |
 | 10. AI (needs an Anthropic API key) | 0 / 10 |
 
 ---
@@ -165,7 +165,7 @@ _Needs Phase 1 accounts._
 - [ ] Tablet layouts (S)
 - [ ] Accessibility pass and localization (Hindi first) (M)
 - [ ] Mobile app (`NoirlyLedger`) brought up to web parity (L)
-- [ ] Update README (it still describes Phase 0) (S)
+- [x] Update README (it still describes Phase 0) (S) — done 2026-11-12
 
 ## Phase 10 — AI
 

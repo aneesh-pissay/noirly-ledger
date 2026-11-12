@@ -15,7 +15,20 @@ import { runRetention } from "@/src/server/retention";
 
 export const runtime = "nodejs";
 
+/**
+ * The daily job. Vercel Cron calls it with GET (vercel.json) and sends
+ * `Authorization: Bearer $CRON_SECRET`; `pnpm recurring:run` and the e2e
+ * tests use POST. Both run the same thing, and both need the secret.
+ */
+export async function GET(request: Request) {
+  return runDaily(request);
+}
+
 export async function POST(request: Request) {
+  return runDaily(request);
+}
+
+async function runDaily(request: Request) {
   try {
     const secret = process.env.CRON_SECRET;
     if (!secret || secret.length < 32) {
